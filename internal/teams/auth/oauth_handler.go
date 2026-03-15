@@ -70,7 +70,23 @@ func (h *OAuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.config.OAuth == nil {
+		h.logger.Errorw("OAuth login attempted but OAuth not configured")
 		http.Error(w, "OAuth not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Validate OAuth configuration before proceeding
+	if h.config.OAuth.ClientID == "" {
+		h.logger.Errorw("OAuth login attempted but client_id not configured",
+			"provider", h.config.OAuth.Provider)
+		http.Error(w, "OAuth client_id not configured - server administrator must set teams.oauth.client_id", http.StatusInternalServerError)
+		return
+	}
+
+	if h.config.OAuth.ClientSecret == "" {
+		h.logger.Errorw("OAuth login attempted but client_secret not configured",
+			"provider", h.config.OAuth.Provider)
+		http.Error(w, "OAuth client_secret not configured - server administrator must set teams.oauth.client_secret", http.StatusInternalServerError)
 		return
 	}
 
@@ -124,10 +140,12 @@ func (h *OAuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	// Build the callback URL from the request
 	callbackURL := buildCallbackURL(r)
 
-	// Build the authorization URL
+	// Build the authorization URL with client_id
 	authURL := provider.BuildAuthURL(h.config.OAuth.ClientID, callbackURL, state, codeChallenge)
 
-	h.logger.Infow("initiating OAuth login", "provider", h.config.OAuth.Provider)
+	h.logger.Infow("initiating OAuth login",
+		"provider", h.config.OAuth.Provider,
+		"client_id", h.config.OAuth.ClientID)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 

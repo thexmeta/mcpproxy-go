@@ -53,4 +53,27 @@ export const authApi = {
     if (redirectUri) params.set('redirect_uri', redirectUri)
     return `${API_BASE}/auth/login${params.toString() ? '?' + params.toString() : ''}`
   },
+
+  // Check if OAuth is properly configured (returns error message if not)
+  async checkOAuthConfig(): Promise<string | null> {
+    try {
+      // Make a test request to the login endpoint to check configuration
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'GET',
+        redirect: 'manual', // Don't follow redirect, just check response
+      })
+      
+      // If we get 500, OAuth might not be configured
+      if (response.status === 500) {
+        const text = await response.text()
+        if (text.includes('client_id') || text.includes('client_secret') || text.includes('OAuth not configured')) {
+          return text || 'OAuth configuration error'
+        }
+      }
+      return null // No error
+    } catch (e) {
+      // Network error or other issue
+      return null
+    }
+  },
 }
