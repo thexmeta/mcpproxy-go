@@ -12,11 +12,20 @@ const (
 )
 
 // EnvProvider resolves secrets from environment variables
-type EnvProvider struct{}
+type EnvProvider struct {
+	// fallbackResolver is used to resolve env vars from keyring when not found in process env
+	fallbackResolver *Resolver
+}
 
 // NewEnvProvider creates a new environment variable provider
 func NewEnvProvider() *EnvProvider {
 	return &EnvProvider{}
+}
+
+// SetFallbackResolver sets a resolver to use for falling back to keyring lookup
+// This allows ${env:NAME} to be resolved from keyring if the env var is not set
+func (p *EnvProvider) SetFallbackResolver(resolver *Resolver) {
+	p.fallbackResolver = resolver
 }
 
 // CanResolve returns true if this provider can handle the given secret type
@@ -24,18 +33,40 @@ func (p *EnvProvider) CanResolve(secretType string) bool {
 	return secretType == SecretTypeEnv
 }
 
-// Resolve retrieves the secret value from environment variables
-func (p *EnvProvider) Resolve(_ context.Context, ref Ref) (string, error) {
+// Resolve retrieves the secret value from environment variables.
+// If the environment variable is not found and a fallback resolver is configured,
+// it will attempt to resolve from keyring using the same name.
+func (p *EnvProvider) Resolve(ctx context.Context, ref Ref) (string, error) {
 	if !p.CanResolve(ref.Type) {
 		return "", fmt.Errorf("env provider cannot resolve secret type: %s", ref.Type)
 	}
 
+	// First, try to get from actual environment variables
 	value := os.Getenv(ref.Name)
-	if value == "" {
-		return "", fmt.Errorf("environment variable %s not found or empty", ref.Name)
+	if value != "" {
+		return value, nil
 	}
 
-	return value, nil
+	// If not found in environment and fallback resolver is available,
+	// try to resolve from keyring (for env vars set via UI)
+	if p.fallbackResolver != nil {
+		keyringRef := Ref{
+			Type:     "keyring",
+			Name:     ref.Name,
+			Original: fmt.Sprintf("${keyring:%s}", ref.Name),
+		}
+
+		// Try to resolve from keyring
+		keyringProvider := p.fallbackResolver.providers["keyring"]
+		if keyringProvider != nil && keyringProvider.IsAvailable() {
+			keyringValue, err := keyringProvider.Resolve(ctx, keyringRef)
+			if err == nil && keyringValue != "" {
+				return keyringValue, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("environment variable %s not found or empty", ref.Name)
 }
 
 // Store is not supported for environment variables

@@ -6,7 +6,7 @@
 
 ## Overview
 
-MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility improvements, MCP gateway integration enhancements, and bug fixes for server configuration handling.
+MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility improvements, MCP gateway integration enhancements, OAuth login error handling, and bug fixes for server configuration handling.
 
 ## What's New
 
@@ -20,10 +20,22 @@ MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility impr
 - Fixed Windows backslash escaping in configuration tests
 - Improved tray application stability on Windows
 
+### OAuth Login Improvements
+- **Fixed:** Login UI now shows clear error when OAuth `client_id` is not configured
+- Added backend validation for OAuth `client_id` and `client_secret` before building auth URL
+- Added detailed error logging for OAuth configuration issues
+- Frontend now displays administrator action required message with configuration instructions
+- Prevents silent failures when OAuth credentials are missing
+
 ## Bug Fixes
 
 ### Core
 - **fix:** CopyServerConfig missing SkipQuarantine and Shared fields - Server configuration now properly preserves quarantine bypass settings and shared server flags during copy operations
+
+### OAuth/Teams Edition
+- **fix:** OAuth login now validates `client_id` and `client_secret` before redirecting
+- **fix:** Login UI displays clear error message when OAuth configuration is incomplete
+- **fix:** Added error logging for OAuth configuration issues to aid troubleshooting
 
 ### Windows-Specific
 - **fix:** Handle unresolved secret refs in data_dir on Windows - Proper handling of environment variable expansion in data directory paths
@@ -31,6 +43,27 @@ MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility impr
 
 ### MCP Integration
 - **fix:** Adapt retrieve_tools instructions for code execution routing mode - Updated tool discovery instructions to properly route code execution requests
+
+## Configuration Example
+
+For Teams Edition OAuth login to work, administrators must configure:
+
+```json
+{
+  "teams": {
+    "enabled": true,
+    "admin_emails": ["admin@example.com"],
+    "oauth": {
+      "provider": "google",
+      "client-id": "your-oauth-client-id",
+      "client-secret": "your-oauth-client-secret",
+      "allowed-domains": ["example.com"]
+    }
+  }
+}
+```
+
+Supported providers: `google`, `github`, `microsoft`
 
 ## Files in This Release
 

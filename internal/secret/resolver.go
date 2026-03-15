@@ -14,8 +14,12 @@ func NewResolver() *Resolver {
 	}
 
 	// Register default providers
-	r.RegisterProvider("env", NewEnvProvider())
+	envProvider := NewEnvProvider()
+	r.RegisterProvider("env", envProvider)
 	r.RegisterProvider("keyring", NewKeyringProvider())
+
+	// Wire up env provider's fallback resolver to allow ${env:NAME} to resolve from keyring
+	envProvider.SetFallbackResolver(r)
 
 	return r
 }

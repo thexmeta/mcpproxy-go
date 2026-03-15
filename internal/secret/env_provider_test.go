@@ -158,3 +158,61 @@ func TestEnvProvider_List(t *testing.T) {
 	assert.True(t, foundSecrets["TEST_API_KEY"] || foundSecrets["TEST_PASSWORD"],
 		"Should detect at least one of the secret-like variables")
 }
+
+func TestEnvProvider_ResolveWithFallback(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a resolver with both env and keyring providers
+	resolver := NewResolver()
+
+	// Store a value in keyring
+	keyringRef := Ref{
+		Type:     "keyring",
+		Name:     "TEST_FALLBACK_VAR",
+		Original: "${keyring:TEST_FALLBACK_VAR}",
+	}
+	testValue := "fallback-secret-value"
+	err := resolver.Store(ctx, keyringRef, testValue)
+	// Skip test if keyring is not available
+	if err != nil {
+		t.Skip("Keyring not available, skipping fallback test")
+		return
+	}
+
+	// Get the env provider from the resolver
+	envProvider := resolver.providers["env"].(*EnvProvider)
+
+	t.Run("fallback to keyring when env var not set", func(t *testing.T) {
+		// Make sure the env var is NOT set
+		os.Unsetenv("TEST_FALLBACK_VAR")
+
+		ref := Ref{
+			Type:     "env",
+			Name:     "TEST_FALLBACK_VAR",
+			Original: "${env:TEST_FALLBACK_VAR}",
+		}
+
+		result, err := envProvider.Resolve(ctx, ref)
+
+		assert.NoError(t, err)
+		assert.Equal(t, testValue, result)
+	})
+
+	t.Run("env var takes precedence over keyring", func(t *testing.T) {
+		// Set the env var
+		envValue := "env-value"
+		os.Setenv("TEST_FALLBACK_VAR", envValue)
+		defer os.Unsetenv("TEST_FALLBACK_VAR")
+
+		ref := Ref{
+			Type:     "env",
+			Name:     "TEST_FALLBACK_VAR",
+			Original: "${env:TEST_FALLBACK_VAR}",
+		}
+
+		result, err := envProvider.Resolve(ctx, ref)
+
+		assert.NoError(t, err)
+		assert.Equal(t, envValue, result)
+	})
+}
