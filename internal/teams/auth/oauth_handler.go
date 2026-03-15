@@ -153,17 +153,26 @@ func (h *OAuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/auth/callback?code=xxx&state=yyy
 func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		h.logger.Warnw("OAuth callback with invalid method", "method", r.Method)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	if h.config.OAuth == nil {
+		h.logger.Errorw("OAuth callback but OAuth not configured")
 		http.Error(w, "OAuth not configured", http.StatusInternalServerError)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
+	h.logger.Infow("OAuth callback received",
+		"provider", h.config.OAuth.Provider,
+		"has_code", code != "",
+		"has_state", state != "",
+		"remote_addr", r.RemoteAddr,
+		"user_agent", r.UserAgent(),
+	)
 
 	// Validate required parameters
 	if code == "" {
@@ -186,10 +195,15 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	h.statesMu.Unlock()
 
 	if !ok {
-		h.logger.Warnw("OAuth callback with invalid state", "state", state)
+		h.logger.Warnw("OAuth callback with invalid state",
+			"state", state,
+			"pending_states_count", len(h.pendingStates))
 		writeJSONError(w, http.StatusBadRequest, "invalid or expired state parameter")
 		return
 	}
+
+	h.logger.Infow("OAuth state validated, exchanging code for tokens",
+		"provider", h.config.OAuth.Provider)
 
 	// Get provider
 	provider, err := GetProvider(h.config.OAuth.Provider, h.config.OAuth.TenantID)
@@ -201,6 +215,8 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Build the callback URL (must match the one used in login)
 	callbackURL := buildCallbackURL(r)
+	h.logger.Infow("Using callback URL for token exchange",
+		"callback_url", callbackURL)
 
 	// Exchange code for tokens
 	tokenResp, err := provider.ExchangeCode(
@@ -212,24 +228,41 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		pending.CodeVerifier,
 	)
 	if err != nil {
-		h.logger.Errorw("OAuth code exchange failed", "error", err)
+		h.logger.Errorw("OAuth code exchange failed",
+			"error", err,
+			"provider", h.config.OAuth.Provider,
+			"callback_url", callbackURL)
 		http.Error(w, "authentication failed", http.StatusInternalServerError)
 		return
 	}
 
+	h.logger.Infow("Token exchange successful, fetching user info",
+		"provider", h.config.OAuth.Provider,
+		"has_access_token", tokenResp.AccessToken != "",
+		"has_id_token", tokenResp.IDToken != "")
+
 	// Fetch user info (try ID token first for OIDC providers, fall back to userinfo endpoint)
 	userInfo, err := provider.FetchUserInfoFromToken(r.Context(), tokenResp)
 	if err != nil {
-		h.logger.Errorw("failed to fetch user info", "error", err)
+		h.logger.Errorw("failed to fetch user info",
+			"error", err,
+			"provider", h.config.OAuth.Provider)
 		http.Error(w, "failed to retrieve user information", http.StatusInternalServerError)
 		return
 	}
 
 	if userInfo.Email == "" {
-		h.logger.Warnw("OAuth user info missing email")
+		h.logger.Warnw("OAuth user info missing email",
+			"provider", h.config.OAuth.Provider,
+			"user_info", userInfo)
 		http.Error(w, "email address is required", http.StatusBadRequest)
 		return
 	}
+
+	h.logger.Infow("User info retrieved successfully",
+		"email", userInfo.Email,
+		"display_name", userInfo.DisplayName,
+		"provider", h.config.OAuth.Provider)
 
 	// Check allowed domains
 	if !h.isDomainAllowed(userInfo.Email) {
