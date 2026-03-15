@@ -4,6 +4,55 @@
 
 ---
 
+## OAuth Token Persistence Bug Fix (v0.21.4)
+
+### Problem: OAuth Tokens Not Being Saved to Database
+
+**Symptom:** OAuth authorization completes successfully in browser ("Authorization Successful"), but server shows "Authentication required" and "no valid token available" errors.
+
+**Root Cause:** The OAuth handler was being obtained from the error object using `client.GetOAuthHandler(authErr)` instead of from the configured client using `c.GetOAuthHandler()`. The error-based handler doesn't have access to the `TokenStore` that was configured in the OAuth config, so tokens couldn't be persisted.
+
+**Why This Happened:**
+1. The code pattern `client.GetOAuthHandler(authErr)` extracts the handler from the OAuth authorization error
+2. This handler was created during the initial failed connection attempt, before the OAuth config with TokenStore was fully set up
+3. When `ProcessAuthorizationResponse` tried to save the token, the TokenStore was nil or not properly configured
+
+**Fix Applied:**
+```go
+// OLD (broken):
+oauthHandler := client.GetOAuthHandler(authErr)
+if oauthHandler == nil {
+    return fmt.Errorf("failed to get OAuth handler from error")
+}
+
+// NEW (fixed):
+oauthHandler := c.GetOAuthHandler()  // Get from configured client
+if oauthHandler == nil {
+    // Fallback to error-based handler for backward compatibility
+    oauthHandler = client.GetOAuthHandler(authErr)
+    if oauthHandler == nil {
+        return fmt.Errorf("failed to get OAuth handler: client not configured with OAuth")
+    }
+    c.logger.Warn("⚠️ Using OAuth handler from error (fallback mode)")
+} else {
+    c.logger.Info("✅ OAuth handler obtained from configured client (token persistence enabled)")
+}
+```
+
+**Locations Fixed:** `internal/upstream/core/connection_oauth.go`
+- Line ~964: `handleOAuthAuthorization()` method
+- Line ~1357: `handleOAuthAuthorizationWithResult()` method  
+- Line ~1878: `getAuthorizationURLQuick()` method
+
+**Testing:**
+- GitHub Copilot MCP server OAuth flow now persists tokens correctly
+- Token survives daemon restarts
+- Subsequent connections use persisted token without re-authentication
+
+**Lesson:** Always get handlers from the configured client instance, not from error objects. Error-based extraction should only be a fallback for backward compatibility.
+
+---
+
 ## Secret Resolution Patterns (v0.21.3)
 
 ### Fallback Resolver Pattern for Environment Variables

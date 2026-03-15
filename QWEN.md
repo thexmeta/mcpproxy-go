@@ -193,6 +193,31 @@ mcpproxy upstream logs <name> --tail=100 --follow
 mcpproxy doctor
 ```
 
+### Tool Management (Per-Server)
+
+```bash
+# List tools for a specific server
+mcpproxy tools list <server-name>
+
+# Enable/disable individual tools
+mcpproxy tools disable <server-name> <tool-name>
+mcpproxy tools enable <server-name> <tool-name>
+mcpproxy tools toggle <server-name> <tool-name>
+
+# Rename tools (for better clarity or AI context)
+mcpproxy tools rename <server-name> <old-tool-name> <new-name>
+mcpproxy tools rename <server-name> <tool-name> --description="New description"
+
+# Bulk operations
+mcpproxy tools disable-all <server-name> --except=tool1,tool2
+mcpproxy tools enable-all <server-name>
+
+# View tool usage statistics
+mcpproxy tools stats <server-name>
+```
+
+**Web UI:** Access tool management at `http://localhost:3303/ui/` → Select server → Tools tab
+
 ### Activity Log
 
 ```bash
@@ -271,6 +296,49 @@ curl "http://127.0.0.1:8080/events?apikey=your-api-key"
 - RFC 8252 compliant dynamic port allocation
 - PKCE security enabled by default
 - Automatic token refresh and storage
+- **Static Credentials Support**: Configure `client_id` and `client_secret` via keyring for reliable authentication
+- **OAuth Bug Fix (v0.21.4)**: Fixed token persistence issue where `GetOAuthHandler()` was called from error instead of configured client
+
+**GitHub Copilot MCP Configuration Example:**
+```jsonc
+{
+  "name": "Github",
+  "url": "https://api.githubcopilot.com/mcp/",
+  "protocol": "streamable-http",
+  "env": {
+    "GITHUB_TOKEN": "${keyring:github_token}"
+  },
+  "oauth": {
+    "client_id": "${keyring:github_client_id}",
+    "client_secret": "${keyring:github_client_secret}"
+  },
+  "enabled": true
+}
+```
+
+**Setup Commands:**
+```bash
+mcpproxy secrets set github_token
+mcpproxy secrets set github_client_id
+mcpproxy secrets set github_client_secret
+mcpproxy auth login --server=Github
+```
+
+### Tool Management
+
+Per-server tool customization for better AI agent control:
+
+- **Enable/Disable Tools**: Fine-tune which tools are available per server
+- **Rename Tools**: Improve clarity and AI context with custom names
+- **Bulk Operations**: Enable/disable multiple tools at once
+- **Usage Statistics**: Track which tools are used most
+- **Web UI Integration**: Visual tool management interface
+
+**Use Cases:**
+- Disable dangerous tools (e.g., file deletion, code execution)
+- Rename ambiguous tools for better AI understanding
+- Reduce token usage by hiding unused tools
+- Create server-specific tool presets
 
 ### Docker Security Isolation
 

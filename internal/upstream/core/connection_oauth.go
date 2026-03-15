@@ -960,14 +960,21 @@ func (c *Client) handleOAuthAuthorization(ctx context.Context, authErr error, oa
 		}
 	}
 
-	// Get the OAuth handler from the error (as shown in the example)
-	oauthHandler := client.GetOAuthHandler(authErr)
+	// Get the OAuth handler from the configured client (not from error)
+	// This ensures the TokenStore is properly available for token persistence
+	oauthHandler := c.GetOAuthHandler()
 	if oauthHandler == nil {
-		return fmt.Errorf("failed to get OAuth handler from error")
+		// Fallback: try to get handler from error for backward compatibility
+		oauthHandler = client.GetOAuthHandler(authErr)
+		if oauthHandler == nil {
+			return fmt.Errorf("failed to get OAuth handler: client not configured with OAuth")
+		}
+		c.logger.Warn("⚠️ Using OAuth handler from error (fallback mode - token persistence may not work)",
+			zap.String("server", c.config.Name))
+	} else {
+		c.logger.Info("✅ OAuth handler obtained from configured client (token persistence enabled)",
+			zap.String("server", c.config.Name))
 	}
-
-	c.logger.Info("✅ OAuth handler obtained from error",
-		zap.String("server", c.config.Name))
 
 	// Generate PKCE code verifier and challenge
 	codeVerifier, err := client.GenerateCodeVerifier()
@@ -1353,10 +1360,20 @@ func (c *Client) handleOAuthAuthorizationWithResult(ctx context.Context, authErr
 		}
 	}
 
-	// Get the OAuth handler from the error
-	oauthHandler := client.GetOAuthHandler(authErr)
+	// Get the OAuth handler from the configured client (not from error)
+	// This ensures the TokenStore is properly available for token persistence
+	oauthHandler := c.GetOAuthHandler()
 	if oauthHandler == nil {
-		return result, fmt.Errorf("failed to get OAuth handler from error")
+		// Fallback: try to get handler from error for backward compatibility
+		oauthHandler = client.GetOAuthHandler(authErr)
+		if oauthHandler == nil {
+			return result, fmt.Errorf("failed to get OAuth handler: client not configured with OAuth")
+		}
+		c.logger.Warn("⚠️ Using OAuth handler from error (fallback mode - token persistence may not work)",
+			zap.String("server", c.config.Name))
+	} else {
+		c.logger.Info("✅ OAuth handler obtained from configured client (token persistence enabled)",
+			zap.String("server", c.config.Name))
 	}
 
 	// Generate PKCE code verifier and challenge
@@ -1874,10 +1891,20 @@ func (c *Client) getAuthorizationURLQuick(ctx context.Context, oauthConfig *clie
 		return "", nil, "", "", fmt.Errorf("initialization failed with non-OAuth error: %w", err)
 	}
 
-	// Get the OAuth handler from the error
-	oauthHandler := client.GetOAuthHandler(err)
+	// Get the OAuth handler from the configured client (not from error)
+	// This ensures the TokenStore is properly available for token persistence
+	oauthHandler := c.GetOAuthHandler()
 	if oauthHandler == nil {
-		return "", nil, "", "", fmt.Errorf("failed to get OAuth handler from error")
+		// Fallback: try to get handler from error for backward compatibility
+		oauthHandler = client.GetOAuthHandler(err)
+		if oauthHandler == nil {
+			return "", nil, "", "", fmt.Errorf("failed to get OAuth handler: client not configured with OAuth")
+		}
+		c.logger.Warn("⚠️ Using OAuth handler from error (fallback mode - token persistence may not work)",
+			zap.String("server", c.config.Name))
+	} else {
+		c.logger.Info("✅ OAuth handler obtained from configured client (token persistence enabled)",
+			zap.String("server", c.config.Name))
 	}
 
 	// Generate PKCE code verifier and challenge

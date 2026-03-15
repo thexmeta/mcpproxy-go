@@ -1,227 +1,135 @@
-# MCPProxy v0.21.3 Session Summary
+# Session Summary - Tool Management Feature Development
 
-**Date:** March 15, 2026  
-**Session Type:** Release Build + Bug Fixes  
-**Version Released:** v0.21.3
-
----
+**Date:** 2026-03-15  
+**Session Duration:** ~2 hours  
+**Developer:** AI Assistant (Qwen Code)
 
 ## Key Achievements
 
-### Release v0.21.3 Built and Tagged
-- ✅ Built Windows binaries (mcpproxy.exe, mcpproxy-tray.exe)
-- ✅ Created release archive: `mcpproxy-v0.21.3-windows-amd64.zip` (27.1 MB)
-- ✅ Generated OpenAPI 3.1 specification
-- ✅ Built frontend production assets
-- ✅ Tagged release: `v0.21.3`
+### 🔧 OAuth Authentication Bug Fix
+- **Problem:** GitHub Copilot MCP server OAuth tokens weren't being persisted to the BBolt database
+- **Root Cause:** `GetOAuthHandler()` was being called from the error object instead of the configured client, causing the TokenStore to be unavailable during token exchange
+- **Fix Applied:** Modified `internal/upstream/core/connection_oauth.go` to use `c.GetOAuthHandler()` (from configured client) instead of `client.GetOAuthHandler(authErr)` (from error)
+- **Locations Fixed:** 3 occurrences in `connection_oauth.go` (lines ~964, ~1357, ~1878)
+- **Status:** ✅ Code fix implemented and compiled successfully
 
-### Bug Fixes Implemented
+### 🔐 OAuth Configuration Resolution
+- **Issue:** Windows UTF-8 BOM causing config parsing failures
+- **Resolution:** Created Python scripts to remove BOM from `mcp_config.json`
+- **Working Config:** GitHub Copilot MCP with static OAuth credentials via keyring:
+  ```json
+  {
+    "name": "Github",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "protocol": "streamable-http",
+    "env": {
+      "GITHUB_TOKEN": "${keyring:github_token}"
+    },
+    "oauth": {
+      "client_id": "${keyring:github_client_id}",
+      "client_secret": "${keyring:github_client_secret}"
+    },
+    "enabled": true
+  }
+  ```
 
-#### 1. OAuth Login Missing client_id (Critical)
-**Problem:** Login UI redirected without client_id when Teams OAuth configuration was incomplete.
+### 📝 Documentation Updates
+- **QWEN.md Updated:**
+  - Added Tool Management CLI commands section
+  - Documented OAuth bug fix in Key Features
+  - Added GitHub Copilot MCP configuration example
+  - Added setup commands for OAuth secrets
 
-**Solution:**
-- Backend validation for `client_id` and `client_secret` before building auth URL
-- Frontend error detection with `checkOAuthConfig()` API call
-- Clear error messages showing administrator action required
-- Disabled login button when configuration errors detected
+### 🎯 Tool Management Feature (Planned)
+**Features to Implement:**
+1. **Per-server tool enable/disable**
+   - CLI: `mcpproxy tools enable/disable/toggle <server> <tool>`
+   - API: `POST /api/v1/servers/{name}/tools/{tool}/enable`
+   - Web UI: Toggle switches in server details page
 
-**Files Changed:**
-- `internal/teams/auth/oauth_handler.go` - Added validation
-- `frontend/src/services/auth-api.ts` - Added config check API
-- `frontend/src/views/teams/Login.vue` - Added error UI
+2. **Tool renaming**
+   - CLI: `mcpproxy tools rename <server> <old-name> <new-name>`
+   - API: `POST /api/v1/servers/{name}/tools/{tool}/rename`
+   - Use case: Improve AI context, clarify ambiguous tool names
 
-#### 2. Environment Variables Can't Be Retrieved from UI Secrets (Critical)
-**Problem:** `${env:NAME}` references failed when env vars were set via UI secret management.
+3. **Bulk operations**
+   - `mcpproxy tools disable-all <server> --except=tool1,tool2`
+   - `mcpproxy tools enable-all <server>`
 
-**Solution:**
-- Added keyring fallback resolver to `EnvProvider`
-- Resolution order: Process env vars → Keyring lookup
-- Allows UI-set secrets to work with `${env:...}` references
-- Added test coverage: `TestEnvProvider_ResolveWithFallback`
+4. **Tool usage statistics**
+   - Track call counts, error rates, average execution time
+   - CLI: `mcpproxy tools stats <server>`
 
-**Files Changed:**
-- `internal/secret/env_provider.go` - Added fallback resolver
-- `internal/secret/resolver.go` - Wired up fallback
-- `internal/secret/env_provider_test.go` - Added tests
+## Current State
 
-#### 3. MCP Gateway Connection Skill
-**Deliverable:** Comprehensive skill documentation for AI agents
+### ✅ Completed
+- OAuth bug fix implemented in `connection_oauth.go`
+- QWEN.md documentation updated
+- Config BOM issue resolved
+- GitHub Copilot MCP working with static OAuth credentials
 
-**Files Created:**
-- `skills/mcp-gateway-connection.md` - Full connection guide
-- `skills/SKILL.md` - Quick reference skill manifest
+### ⏳ In Progress
+- Tool management feature design (this session)
 
-### Windows-Specific Fixes
-- Fixed unresolved secret refs in data_dir expansion
-- Fixed backslash escaping in TestLoadConfig_DataDirExpandFailure
-- Improved tray application stability
+### 📋 Next Session Tasks
+1. Implement backend API endpoints for tool management
+2. Add CLI commands for tool operations
+3. Create Web UI for visual tool management
+4. Add database schema for tool preferences
+5. Write unit and E2E tests
 
-### Code Quality
-- All tests passing (47+ secret tests, OAuth tests, integration tests)
-- OpenAPI 3.1 spec regenerated and committed
-- Frontend built with zero errors
+## Active State
 
----
+### File Locations
+- **Project Root:** `E:\Projects\Go\mcpproxy-go`
+- **Config:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
+- **Database:** `C:\Users\eserk\.mcpproxy\config.db`
+- **Logs:** `C:\Users\eserk\AppData\Local\mcpproxy\logs\`
 
-## Architecture Changes
+### Modified Files
+- `internal/upstream/core/connection_oauth.go` - OAuth handler fix
+- `QWEN.md` - Documentation updates
+- `C:\Users\eserk\.mcpproxy\mcp_config.json` - OAuth config (BOM removed)
 
-### Secret Resolution Enhancement
-The env provider now has a fallback resolver pattern:
-```
-┌─────────────────────────────────────┐
-│  ${env:MY_VAR} Reference            │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│  1. Check Process Environment       │
-│     os.Getenv("MY_VAR")             │
-└──────────────┬──────────────────────┘
-               │
-        ┌──────┴──────┐
-        │             │
-   Found ✓       Not Found ✗
-        │             │
-        │             ▼
-        │    ┌────────────────────────┐
-        │    │ 2. Check Keyring       │
-        │    │ ${keyring:MY_VAR}      │
-        │    └────────┬───────────────┘
-        │             │
-        │      ┌──────┴──────┐
-        │      │             │
-        │  Found ✓     Not Found ✗
-        │      │             │
-        ▼      ▼             ▼
-   Return  Return      Return Error
-   Value   Value
-```
+### Helper Scripts Created (Can be deleted)
+- `E:\Projects\Go\mcpproxy-go\update-github-oauth.py`
+- `E:\Projects\Go\mcpproxy-go\update-github-oauth.ps1`
+- `E:\Projects\Go\mcpproxy-go\fix-github-server.py`
+- `E:\Projects\Go\mcpproxy-go\fix-bom.py`
+- `E:\Projects\Go\mcpproxy-go\restore-github-copilot.py`
 
-### OAuth Error Flow
-```
-User Clicks Login
-       │
-       ▼
-┌──────────────────────┐
-│ checkOAuthConfig()   │
-│ GET /api/v1/auth/    │
-│ login (redirect=man) │
-└──────┬───────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│ Backend Validates:   │
-│ - client_id present? │
-│ - client_secret?     │
-└──────┬───────────────┘
-       │
-  ┌────┴────┐
-  │         │
-Valid ✓  Invalid ✗
-  │         │
-  │         ▼
-  │    ┌────────────────────┐
-  │    │ Return 500 Error   │
-  │    │ "OAuth client_id   │
-  │    │ not configured"    │
-  │    └──────┬─────────────┘
-  │           │
-  │           ▼
-  │    ┌────────────────────┐
-  │    │ Frontend Shows     │
-  │    │ Error Alert        │
-  │    └────────────────────┘
-  │
-  ▼
-Redirect to OAuth
-Provider with
-client_id in URL
-```
+## Open Questions for Next Session
 
----
+1. **Tool Renaming Strategy:**
+   - Should renamed tools be stored in config or database?
+   - How to handle tool name conflicts?
+   - Should the original tool name be preserved for MCP protocol?
 
-## Why Behind Changes
+2. **Enable/Disable Implementation:**
+   - Filter tools at the MCP protocol layer or at the API/Web UI layer?
+   - Should disabled tools be hidden or return "disabled" error?
 
-### OAuth Validation
-The OAuth flow was failing silently because the backend assumed configuration was always valid. Added explicit validation to fail fast with clear error messages, enabling administrators to fix configuration before users encounter broken login.
+3. **Web UI Design:**
+   - New "Tools" tab per server?
+   - Inline editing in server list?
+   - Bulk selection UI pattern?
 
-### Env Var Fallback
-Users were setting secrets via UI (`/api/v1/secrets`) which stores in keyring, but config referenced `${env:NAME}`. The fallback allows both patterns to work:
-- Actual env vars for deployment automation
-- Keyring-stored values for UI-managed secrets
+## Scratchpad
 
----
-
-## Metrics
-
-| Metric | Value |
-|--------|-------|
-| Commits in v0.21.3 | 5 |
-| Files Changed | 12 |
-| Lines Added | ~200 |
-| Tests Added | 2 |
-| Test Coverage | All passing |
-| Binary Size | 43.5 MB (core), 31.0 MB (tray) |
-
----
-
-## Open Tasks / Next Session
-
-### Immediate Follow-up
-1. **Push release to GitHub** - Upload artifacts and create GitHub release
-2. **Test on macOS/Linux** - Verify cross-platform builds work
-3. **Update documentation** - Add OAuth config guide to docs.mcpproxy.app
-
-### Backlog Items
-- [ ] Add OAuth configuration wizard to UI
-- [ ] Implement secret migration tool for existing configs
-- [ ] Add telemetry for OAuth failure tracking
-- [ ] Create runbook for OAuth setup per provider (Google, GitHub, Microsoft)
-
----
-
-## Scratchpad (Cleaned)
-
-**Removed stale snippets:** None
-
-**Active configurations:**
-- Release tag: `v0.21.3`
-- Release notes: `releases/RELEASE_NOTES_v0.21.3.md`
-- Release archive: `releases/mcpproxy-v0.21.3-windows-amd64.zip`
-
----
-
-## Lessons Learned
-
-### 1. Silent Failures Are Worse Than Loud Ones
-The OAuth issue existed because the backend didn't validate credentials before using them. Always validate configuration at the point of use, not just at load time.
-
-### 2. Multiple Secret Storage Patterns
-Users expect both `${env:VAR}` and `${keyring:VAR}` to work interchangeably. The fallback resolver pattern allows this flexibility without breaking existing behavior.
-
-### 3. Frontend-Backend Contract
-When backend returns 500 errors, frontend should surface them as actionable messages, not generic "something went wrong" errors.
-
----
-
-## Verification Commands
-
+### Useful Commands Developed
 ```bash
-# Verify release version
-.\mcpproxy.exe --version
+# Remove BOM from config
+python -c "import json; f=open(r'config.json','r',encoding='utf-8-sig'); c=json.load(f); f.close(); f2=open(r'config.json','w',encoding='utf-8'); json.dump(c,f2,indent=2); f2.close()"
 
-# Run secret tests
-go test ./internal/secret/... -v
+# Restart tray after config changes
+taskkill /F /IM mcpproxy.exe /IM mcpproxy-tray.exe & timeout 2 & start mcpproxy-tray.exe
 
-# Run OAuth tests
-go test ./internal/teams/auth/... -v
-
-# Build for release
-make build
+# Check server status
+mcpproxy upstream list --json | python -c "import sys,json; data=json.load(sys.stdin); gh=[s for s in data if s['name']=='Github'][0]; print(json.dumps(gh, indent=2))"
 ```
 
----
-
-**Session Status:** ✅ Complete - Release v0.21.3 built and tagged  
-**Next Action:** Push to GitHub and create release
+### OAuth Debugging Insights
+- The mcp-go library's `ProcessAuthorizationResponse` expects TokenStore to be set in OAuthConfig
+- `client.GetOAuthHandler(authErr)` extracts handler from error - doesn't have TokenStore
+- `c.GetOAuthHandler()` gets handler from configured client - has TokenStore
+- Windows keyring works but requires proper secret names
