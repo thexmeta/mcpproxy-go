@@ -1,6 +1,102 @@
 # Lessons Learned - MCPProxy-Go
 
-**Last Updated:** March 3, 2026
+**Last Updated:** March 15, 2026
+
+---
+
+## Secret Resolution Patterns (v0.21.3)
+
+### Fallback Resolver Pattern for Environment Variables
+
+**Pattern:** When resolving `${env:NAME}` references, first check process environment variables, then fall back to keyring lookup.
+
+**Why:** Users set secrets via UI (`/api/v1/secrets`) which stores in keyring, but configurations reference `${env:NAME}`. The fallback allows both patterns to work without breaking existing behavior.
+
+**Implementation:**
+```go
+// In EnvProvider.Resolve()
+func (p *EnvProvider) Resolve(ctx context.Context, ref Ref) (string, error) {
+    // 1. Try actual environment variables first
+    value := os.Getenv(ref.Name)
+    if value != "" {
+        return value, nil
+    }
+    
+    // 2. Fall back to keyring if fallback resolver configured
+    if p.fallbackResolver != nil {
+        keyringRef := Ref{Type: "keyring", Name: ref.Name}
+        keyringProvider := p.fallbackResolver.providers["keyring"]
+        if keyringProvider != nil && keyringProvider.IsAvailable() {
+            keyringValue, err := keyringProvider.Resolve(ctx, keyringRef)
+            if err == nil && keyringValue != "" {
+                return keyringValue, nil
+            }
+        }
+    }
+    
+    return "", fmt.Errorf("environment variable %s not found", ref.Name)
+}
+```
+
+**Benefits:**
+- Actual env vars take precedence (for deployment automation)
+- Keyring-stored values work for UI-managed secrets
+- No breaking changes to existing configs
+- Enables flexible secret management workflows
+
+---
+
+## OAuth Configuration Validation (v0.21.3)
+
+### Fail Fast with Clear Error Messages
+
+**Pattern:** Validate OAuth credentials (`client_id`, `client_secret`) at the point of use, not just at configuration load time.
+
+**Why:** Silent failures during OAuth flow confuse users. Explicit validation with clear error messages enables administrators to fix configuration before users encounter broken login.
+
+**Implementation:**
+```go
+// In OAuthHandler.HandleLogin()
+if h.config.OAuth.ClientID == "" {
+    h.logger.Errorw("OAuth login attempted but client_id not configured",
+        "provider", h.config.OAuth.Provider)
+    http.Error(w, "OAuth client_id not configured - server administrator must set teams.oauth.client_id", 
+        http.StatusInternalServerError)
+    return
+}
+
+if h.config.OAuth.ClientSecret == "" {
+    h.logger.Errorw("OAuth login attempted but client_secret not configured",
+        "provider", h.config.OAuth.Provider)
+    http.Error(w, "OAuth client_secret not configured", http.StatusInternalServerError)
+    return
+}
+```
+
+**Frontend Error Handling:**
+```typescript
+// Check OAuth config before redirecting
+async checkOAuthConfig(): Promise<string | null> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'GET',
+    redirect: 'manual',
+  })
+  
+  if (response.status === 500) {
+    const text = await response.text()
+    if (text.includes('client_id')) {
+      return text // Show to user
+    }
+  }
+  return null
+}
+```
+
+**Benefits:**
+- Immediate feedback on misconfiguration
+- Actionable error messages for administrators
+- Prevents broken login flows
+- Reduces support tickets
 
 ---
 
