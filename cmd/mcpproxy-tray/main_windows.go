@@ -4,7 +4,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +19,43 @@ const (
 	_SIGTERM = syscall.Signal(0x1) // Dummy signal for graceful shutdown
 	_SIGKILL = syscall.Signal(0x2) // Dummy signal for force kill
 )
+
+// wrapCoreLaunchWithShell wraps the core launch with cmd.exe on Windows
+func wrapCoreLaunchWithShell(coreBinary string, args []string) (string, []string, error) {
+	// Use cmd.exe from system root
+	cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+	if cmdPath == "" || cmdPath == "\\System32\\cmd.exe" {
+		cmdPath = "cmd.exe"
+	}
+
+	// Build command: cmd.exe /c "binary arg1 arg2 ..."
+	command := buildWindowsCommand(coreBinary, args)
+	return cmdPath, []string{"/c", command}, nil
+}
+
+// buildWindowsCommand builds a Windows command line with proper quoting
+func buildWindowsCommand(binary string, args []string) string {
+	quoted := make([]string, 0, len(args)+1)
+	quoted = append(quoted, windowsQuote(binary))
+	for _, arg := range args {
+		quoted = append(quoted, windowsQuote(arg))
+	}
+	return strings.Join(quoted, " ")
+}
+
+// windowsQuote quotes an argument for Windows cmd.exe
+func windowsQuote(arg string) string {
+	if arg == "" {
+		return `""`
+	}
+	// If the argument contains spaces or special characters, quote it
+	if strings.ContainsAny(arg, " \t\n\v\"") {
+		// Escape existing quotes and wrap in quotes
+		escaped := strings.ReplaceAll(arg, `"`, `\"`)
+		return `"` + escaped + `"`
+	}
+	return arg
+}
 
 // forceKillCore forcefully kills the core process (Windows)
 func (cpl *CoreProcessLauncher) forceKillCore() {

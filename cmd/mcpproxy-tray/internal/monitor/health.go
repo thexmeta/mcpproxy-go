@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,11 @@ import (
 	"github.com/smart-mcp-proxy/mcpproxy-go/cmd/mcpproxy-tray/internal/state"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/socket"
 )
+
+// isWindows returns true if the current OS is Windows
+func isWindows() bool {
+	return runtime.GOOS == "windows"
+}
 
 // HealthStatus represents the health status of the core service
 type HealthStatus string
@@ -163,6 +169,24 @@ func (hm *HealthMonitor) WaitForReady() error {
 	ctx, cancel := context.WithTimeout(hm.ctx, hm.readinessTimeout)
 	defer cancel()
 
+	// On Windows, add an initial delay to allow the named pipe to be created
+	// The core server needs time to start and create the pipe listener
+	if isWindows() {
+		initialDelay := 2 * time.Second
+		hm.logger.Debug("Windows detected: adding initial delay for named pipe creation",
+			"delay", initialDelay)
+		select {
+		case <-ctx.Done():
+			elapsed := time.Since(startTime)
+			hm.logger.Error("Timeout waiting for core service to become ready",
+				"elapsed", elapsed,
+				"timeout", hm.readinessTimeout)
+			return fmt.Errorf("timeout waiting for core service to become ready after %v", elapsed)
+		case <-time.After(initialDelay):
+			hm.logger.Debug("Initial delay completed, starting health checks")
+		}
+	}
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -244,11 +268,20 @@ func (hm *HealthMonitor) performHealthCheck() {
 	// Log status changes
 	if status != previousStatus {
 		if checkError != nil {
-			hm.logger.Warnw("Health status changed",
-				"from", previousStatus,
-				"to", status,
-				"error", checkError,
-				"duration", time.Since(startTime))
+			// On Windows, suppress "pipe not found" warnings during initial startup
+			errMsg := checkError.Error()
+			isWindowsPipeNotFound := isWindows() && strings.Contains(errMsg, "The system cannot find the file specified")
+			
+			if isWindowsPipeNotFound && status == HealthStatusUnavailable {
+				// Don't log - this is expected during core startup
+				hm.logger.Debug("Health status: pipe not found (core starting)")
+			} else {
+				hm.logger.Warnw("Health status changed",
+					"from", previousStatus,
+					"to", status,
+					"error", checkError,
+					"duration", time.Since(startTime))
+			}
 		} else {
 			hm.logger.Infow("Health status changed",
 				"from", previousStatus,
@@ -299,10 +332,22 @@ func (hm *HealthMonitor) checkEndpoint(path string) HealthCheck {
 	resp, err := hm.httpClient.Do(req)
 	if err != nil {
 		status := HealthStatusUnavailable
+		errMsg := err.Error()
 
 		// Check if it's a connection error (service not started yet)
-		if strings.Contains(err.Error(), "connection refused") ||
-			strings.Contains(err.Error(), "no such host") {
+		if strings.Contains(errMsg, "connection refused") ||
+			strings.Contains(errMsg, "no such host") {
+			status = HealthStatusUnavailable
+		}
+
+		// On Windows, provide better diagnostics for named pipe errors
+		if isWindows() && strings.Contains(errMsg, "The system cannot find the file specified") {
+			// Named pipe doesn't exist yet - core is still starting
+			hm.logger.Debug("Named pipe not found - core server still starting up")
+			status = HealthStatusUnavailable
+		} else if isWindows() && strings.Contains(errMsg, "All pipes are busy") {
+			// Named pipe exists but all instances are busy
+			hm.logger.Debug("Named pipe busy - retrying")
 			status = HealthStatusUnavailable
 		}
 

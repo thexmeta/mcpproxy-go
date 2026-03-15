@@ -458,7 +458,16 @@ func (c *Client) GetServers() ([]Server, error) {
 	resp, err := c.makeRequest("GET", "/api/v1/servers", nil)
 	if err != nil {
 		if c.logger != nil {
-			c.logger.Warnw("Failed to fetch upstream servers", "error", err)
+			// On Windows, suppress "pipe not found" warnings during initial startup
+			errMsg := err.Error()
+			isWindowsPipeNotFound := runtime.GOOS == "windows" && strings.Contains(errMsg, "The system cannot find the file specified")
+			
+			if isWindowsPipeNotFound {
+				// Don't log - this is expected during core startup
+				c.logger.Debug("Pipe not found fetching servers (core starting)")
+			} else {
+				c.logger.Warnw("Failed to fetch upstream servers", "error", err)
+			}
 		}
 		return nil, err
 	}
