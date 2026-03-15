@@ -6,7 +6,7 @@
 
 ## Overview
 
-MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility improvements, MCP gateway integration enhancements, OAuth login error handling, and bug fixes for server configuration handling.
+MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility improvements, MCP gateway integration enhancements, OAuth login error handling, secret resolution fixes, and bug fixes for server configuration handling.
 
 ## What's New
 
@@ -27,6 +27,13 @@ MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility impr
 - Frontend now displays administrator action required message with configuration instructions
 - Prevents silent failures when OAuth credentials are missing
 
+### Secret Management Improvements
+- **Fixed:** Environment variables set via UI secrets can now be resolved
+- Added keyring fallback for `${env:NAME}` references
+- When an environment variable is not found in the process environment, the system now checks the keyring
+- Allows users to set environment variable values through the UI secret management
+- Actual process environment variables take precedence over keyring values
+
 ## Bug Fixes
 
 ### Core
@@ -36,6 +43,11 @@ MCPProxy v0.21.3 is a maintenance release focusing on Windows compatibility impr
 - **fix:** OAuth login now validates `client_id` and `client_secret` before redirecting
 - **fix:** Login UI displays clear error message when OAuth configuration is incomplete
 - **fix:** Added error logging for OAuth configuration issues to aid troubleshooting
+
+### Secret Resolution
+- **fix:** `${env:NAME}` references now fall back to keyring lookup when env var not set
+- **fix:** Environment variables set via UI secret management are now properly resolved
+- **fix:** Added test coverage for env provider fallback behavior
 
 ### Windows-Specific
 - **fix:** Handle unresolved secret refs in data_dir on Windows - Proper handling of environment variable expansion in data directory paths
@@ -64,6 +76,34 @@ For Teams Edition OAuth login to work, administrators must configure:
 ```
 
 Supported providers: `google`, `github`, `microsoft`
+
+## Secret Management Example
+
+Environment variables can now be set via the UI and referenced in configurations:
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "my-server",
+      "command": "python",
+      "args": ["-m", "my_server"],
+      "env": {
+        "API_KEY": "${env:MY_API_KEY}",
+        "DATABASE_URL": "${env:DB_URL}"
+      }
+    }
+  ]
+}
+```
+
+Set secret values via UI at `/ui/secrets` or API:
+```bash
+curl -X POST http://localhost:8080/api/v1/secrets \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "MY_API_KEY", "value": "sk-1234567890"}'
+```
 
 ## Files in This Release
 
