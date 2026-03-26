@@ -1,103 +1,152 @@
-# Active Context - MCPProxy-Go Tool Management Feature
+# Active Context - MCPProxy-Go Custom Tool Names Feature
 
-**Last Updated:** 2026-03-15  
-**Current Focus:** Tool Management Feature Implementation
+**Last Updated:** 2026-03-26
+**Current Focus:** Custom Tool Names and Descriptions Feature - COMPLETE ✅
 
 ## Current State
 
-### ✅ Completed This Session
-1. **OAuth Bug Fix** - Fixed token persistence in `connection_oauth.go`
-2. **Documentation** - Updated QWEN.md with Tool Management CLI commands
-3. **Config Resolution** - Fixed BOM issue, configured GitHub Copilot MCP with OAuth
+### ✅ Completed This Session (2026-03-26)
 
-### 🎯 Next Task: Implement Tool Management
+1. **Custom Tool Names and Descriptions Feature** - Full implementation
+   - Backend: Runtime layer applies custom names/descriptions from storage
+   - Management Service: Updated to read/write custom fields to BBolt storage
+   - HTTP API: Already supported custom fields, fixed pre-existing feedbackSubmitter bug
+   - CLI: Added `rename`, `describe`, and `reset` commands
+   - Frontend UI: Added EditToolModal component with edit button on each tool card
+   - Tests: 4/4 unit tests passing
 
-**Priority:** High  
-**Estimated Effort:** 4-6 hours
+2. **Windows x64 Release Build Script**
+   - Created `scripts/build-release.bat` for Windows batch builds
+   - Successfully built v0.21.4 release (27.2 MB ZIP)
+   - Verified: `MCPProxy v0.21.4 (personal) windows/amd64`
 
-**Implementation Plan:**
+3. **Documentation**
+   - Updated session_summary.md with complete implementation details
+   - Added architecture flow diagrams
+   - Documented CLI commands and HTTP API
 
-#### Phase 1: Backend API (Go)
-1. Add tool preferences to database schema (`internal/storage/bbolt.go`)
-   - New bucket: `tool_preferences`
-   - Key: `{server_name}:{tool_name}`
-   - Value: `{enabled: bool, custom_name: string, custom_description: string}`
+### 🎯 Next Session Tasks
 
-2. Add management service methods (`internal/management/service.go`)
-   - `GetToolPreferences(serverName string) (map[string]*ToolPreference, error)`
-   - `UpdateToolPreference(serverName, toolName string, pref *ToolPreference) error`
-   - `BulkUpdateToolPreferences(serverName string, updates map[string]*ToolPreference) error`
+**Priority:** High
 
-3. Add HTTP API endpoints (`internal/httpapi/server.go`)
-   - `GET /api/v1/servers/{name}/tools` - List tools with preferences
-   - `POST /api/v1/servers/{name}/tools/{tool}/enable` - Enable tool
-   - `POST /api/v1/servers/{name}/tools/{tool}/disable` - Disable tool
-   - `POST /api/v1/servers/{name}/tools/{tool}/rename` - Rename tool
-   - `POST /api/v1/servers/{name}/tools/bulk` - Bulk operations
+#### Testing and Validation
+1. **End-to-end testing** with running daemon
+   - Test UI: Edit tool name/description in Server Detail page
+   - Test CLI: `mcpproxy tools preferences rename/describe/reset`
+   - Verify custom names appear in tool lists
+   - Verify persistence after daemon restart
 
-4. Add CLI commands (`internal/upstream/cli/tools.go` - new file)
-   - `mcpproxy tools list <server>`
-   - `mcpproxy tools enable <server> <tool>`
-   - `mcpproxy tools disable <server> <tool>`
-   - `mcpproxy tools rename <server> <tool> <new-name>`
-   - `mcpproxy tools stats <server>`
+2. **AI Agent Integration Testing**
+   - Verify AI agents receive customized tool names/descriptions
+   - Test with GitHub Copilot MCP server
+   - Verify tool calls use correct original names (not custom names)
 
-#### Phase 2: Web UI (Vue 3)
-1. Create Tools view component (`frontend/src/views/Tools.vue`)
-2. Add tool management API client (`frontend/src/services/api.ts`)
-3. Add route to router (`frontend/src/router/index.ts`)
-4. Integrate with server details page
+3. **Edge Cases**
+   - Test with empty custom name/description
+   - Test reset to defaults
+   - Test with special characters in custom names
 
-#### Phase 3: Testing
-1. Unit tests for management service
-2. E2E tests for API endpoints
-3. Manual testing with GitHub Copilot MCP server
+#### Documentation Updates
+1. Add user guide for custom tool names in `docs/features/`
+2. Update CLI documentation with new commands
+3. Add API documentation for custom fields
 
 ## Active State
 
 ### Running Processes
-- **MCPProxy Tray:** Running (auto-restarts core)
-- **Core Server:** Running on `127.0.0.1:3303`
-- **Web UI:** Accessible at `http://127.0.0.1:3303`
+- **MCPProxy Tray:** Not currently running (stopped for build)
+- **Core Server:** Not currently running
+- **Build Status:** v0.21.4 release built successfully
 
 ### Database State
 - **Path:** `C:\Users\eserk\.mcpproxy\config.db`
-- **Status:** Active, no schema changes needed yet
-- **OAuth Tokens:** GitHub Copilot MCP configured
+- **Status:** Active, tool_preferences bucket ready
+- **Schema:** ToolPreferenceRecord with CustomName and CustomDescription fields
 
 ### Config State
 - **Path:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
 - **Format:** UTF-8 (no BOM)
-- **GitHub Server:** Configured with OAuth static credentials
+- **Servers:** 20 servers configured
+
+### Build Artifacts
+- **Location:** `releases/v0.21.4/` and `releases/mcpproxy-0.21.4-windows-amd64.zip`
+- **Status:** Built and verified
 
 ## Open Tasks
 
-### High Priority
-- [ ] Design database schema for tool preferences
-- [ ] Implement backend API endpoints
-- [ ] Add CLI commands for tool management
+### High Priority (Testing)
+- [ ] End-to-end UI testing with daemon
+- [ ] CLI command testing
+- [ ] AI agent integration testing
+- [ ] Persistence testing (daemon restart)
 
-### Medium Priority
-- [ ] Create Web UI for tool management
-- [ ] Add tool usage statistics tracking
-- [ ] Implement bulk operations
+### Medium Priority (Documentation)
+- [ ] User guide for custom tool names
+- [ ] API documentation update
+- [ ] CLI documentation update
 
-### Low Priority
-- [ ] Add tool presets (save/load configurations)
-- [ ] Add tool search/filter in Web UI
-- [ ] Add tool call history and analytics
+### Low Priority (Enhancements)
+- [ ] Tool preference export/import
+- [ ] Bulk operations
+- [ ] Audit log for preference changes
+- [ ] Localization support
 
 ## Scratchpad
 
-### API Design Notes
-```typescript
-// Tool Preference Structure
-interface ToolPreference {
-  enabled: boolean;
-  customName?: string;
-  customDescription?: string;
-  originalName: string;
-  lastUsed?: Date;
+### Resume Commands
+
+```bash
+# Start daemon for testing
+cd E:\Projects\Go\mcpproxy-go
+.\mcpproxy.exe serve
+
+# Test CLI commands
+.\mcpproxy.exe tools preferences list -s terminator
+.\mcpproxy.exe tools preferences rename terminator old_tool new_tool_name
+.\mcpproxy.exe tools preferences describe terminator tool "Custom description"
+.\mcpproxy.exe tools preferences reset terminator tool
+
+# Test UI
+# Navigate to http://127.0.0.1:8080/ui/
+# Select server → Tools tab → Click edit button (pencil icon)
+```
+
+### Code Snippets
+
+```go
+// Runtime applies custom names/descriptions
+func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, error) {
+    // Get tool preferences from storage
+    toolPrefs := r.getToolPreferencesFromStorage(serverName)
+    
+    for _, tool := range serverStatus.Tools {
+        // Apply custom name and description from preferences
+        name := tool.Name
+        description := tool.Description
+        if pref, ok := toolPrefs[tool.Name]; ok {
+            if pref.CustomName != "" {
+                name = pref.CustomName
+            }
+            if pref.CustomDescription != "" {
+                description = pref.CustomDescription
+            }
+        }
+        // ...
+    }
+}
+```
+
+### Known Issues
+
+None currently. All builds passing, tests passing.
+
+## Related Documentation
+
+- Session Summary: `session_summary.md`
+- Lessons Learned: `docs/lessons-learned.md`
+- Architecture: `docs/architecture.md`
+- CLI Commands: `docs/cli-management-commands.md`
+- Tool Preferences: `internal/storage/models.go`
   callCount?: number;
 }
 

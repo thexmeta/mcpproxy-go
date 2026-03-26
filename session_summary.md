@@ -1,129 +1,230 @@
-# Session Summary - 2026-03-20
+# Session Summary - 2026-03-26
 
 ## Session Overview
 **Duration:** Single session  
-**Status:** Completed
+**Status:** Completed  
+**Date:** 2026-03-26
+
+---
 
 ## Work Completed
 
-### 1. Tool Disabling Feature - Frontend UI Implementation
+### 1. Custom Tool Names and Descriptions Feature ✅
 
-**Problem:** Tool disabling feature was partially implemented (backend ready, but UI was missing).
+**Problem:** Users couldn't override MCP server tool names and descriptions to provide better AI context or localization.
 
-**Solution:** Added enable/disable toggles to the Server Detail page.
+**Solution:** Implemented full-stack feature to override tool names and descriptions via Web UI, CLI, and HTTP API.
+
+#### Backend Implementation
 
 **Files Modified:**
-| File | Changes |
-|------|---------|
-| `frontend/src/types/api.ts` | Added `ToolPreference` interface and `enabled?: boolean` to `Tool` interface |
-| `frontend/src/services/api.ts` | Added `getToolPreferences()`, `updateToolPreference()`, `deleteToolPreference()` methods |
-| `frontend/src/views/ServerDetail.vue` | Added toggle UI, loading states, visual dimming for disabled tools |
 
-### 2. Windows Release Build
+| Layer | File | Changes |
+|-------|------|---------|
+| Runtime | `internal/runtime/runtime.go` | Modified `GetServerTools()` and `GetAllServerTools()` to apply custom names/descriptions from preferences; Added `getToolPreferencesFromStorage()` helper |
+| Management | `internal/management/service.go` | Updated `GetToolPreferences()` to read from BBolt storage; Updated `UpdateToolPreference()` to save custom fields |
+| HTTP API | `internal/httpapi/server.go` | Fixed pre-existing bug: added `feedbackSubmitter` field and `SetFeedbackSubmitter()` method |
+| CLI | `cmd/mcpproxy/tools_cmd.go` | Added `rename`, `describe`, and `reset` subcommands |
+| Storage | Already supported `ToolPreferenceRecord` with `CustomName` and `CustomDescription` fields |
 
-**Created:** Windows release build script and artifacts for v0.22.0
+**Storage Schema:**
+```go
+type ToolPreferenceRecord struct {
+    ServerName        string    `json:"server_name"`
+    ToolName          string    `json:"tool_name"`
+    Enabled           bool      `json:"enabled"`
+    CustomName        string    `json:"custom_name,omitempty"`
+    CustomDescription string    `json:"custom_description,omitempty"`
+    Created           time.Time `json:"created"`
+    Updated           time.Time `json:"updated"`
+}
+```
 
-**Artifacts Generated:**
+#### Frontend UI Implementation
+
+**Files Created/Modified:**
+
+| File | Type | Changes |
+|------|------|---------|
+| `frontend/src/components/EditToolModal.vue` | New | Modal dialog for editing tool preferences |
+| `frontend/src/views/ServerDetail.vue` | Modified | Added edit button to tool cards, integrated modal |
+| `frontend/src/services/api.ts` | Modified | Added `updateToolPreferenceFull()` method |
+
+**UI Features:**
+- Edit button (pencil icon) on each tool card
+- Modal with custom name, custom description, and enable/disable toggle
+- Reset to defaults button
+- Toast notifications for success/error feedback
+- Automatic tool list refresh after saving
+
+#### CLI Commands
+
+```bash
+# List tool preferences (shows custom names/descriptions)
+mcpproxy tools preferences list --server=server-name
+
+# Rename a tool
+mcpproxy tools preferences rename server-name tool-name new-custom-name
+
+# Set custom description
+mcpproxy tools preferences describe server-name tool-name "Custom description here"
+
+# Reset to defaults
+mcpproxy tools preferences reset server-name tool-name
+```
+
+#### HTTP API
+
+**Endpoint:** `PUT /api/v1/servers/{id}/tools/preferences/{tool}`
+
+**Request:**
+```json
+{
+  "enabled": true,
+  "custom_name": "My Custom Tool Name",
+  "custom_description": "A better description for this tool"
+}
+```
+
+---
+
+### 2. Windows x64 Release Build Script ✅
+
+**Created:** `scripts/build-release.bat` - Batch script for building Windows x64 releases.
+
+**Features:**
+- Builds frontend assets (npm install && npm run build)
+- Copies frontend to embed location (web/frontend/dist)
+- Generates OpenAPI specification (swag)
+- Builds mcpproxy.exe (core daemon)
+- Builds mcpproxy-tray.exe (system tray UI)
+- Creates ZIP archive for distribution
+
+**Usage:**
+```batch
+scripts\build-release.bat v0.21.4
+```
+
+**Build Artifacts (v0.21.4):**
 | File | Size |
 |------|------|
-| `releases/mcpproxy-0.22.0-windows-amd64.zip` | 26.5 MB |
-| `releases/mcpproxy-0.22.0-windows-arm64.zip` | 23.6 MB |
+| `mcpproxy.exe` | 43.7 MB |
+| `mcpproxy-tray.exe` | 31.0 MB |
+| `mcpproxy-0.21.4-windows-amd64.zip` | 27.2 MB |
 
-**Script:** `scripts/build-release.ps1`
-
-### 3. Tool Disabling Persistence Bug Fix
-
-**Problem:** Disabled tools disappeared from UI after restart because:
-- `GetServerTools()` filtered out disabled tools entirely
-- No endpoint existed to fetch all tools including disabled ones
-
-**Solution:** Added separate `/tools/all` endpoint that returns ALL tools with `enabled` field.
-
-**Files Modified:**
-
-| Layer | File | Change |
-|-------|------|--------|
-| Runtime | `internal/runtime/runtime.go` | Added `GetAllServerTools()` - returns all tools with `enabled` flag |
-| Service | `internal/management/service.go` | Added `GetAllServerTools` to interfaces and implementation |
-| HTTP API | `internal/httpapi/server.go` | Added `GET /tools/all` route and handler |
-| Frontend API | `frontend/src/services/api.ts` | Added `getAllServerTools()` method |
-| Frontend Types | `frontend/src/types/api.ts` | Added `enabled?: boolean` to `Tool` |
-| Frontend UI | `frontend/src/views/ServerDetail.vue` | Use `/tools/all`, updated `isToolEnabled()` |
-
-**Flow After Fix:**
+**Verification:**
 ```
-UI Load Tools → GET /api/v1/servers/{id}/tools/all → Returns ALL tools
-                                                         ↓
-                                               Each tool has enabled: true/false
-                                                         ↓
-                                               Disabled tools visible with toggle
-                                                         ↓
-                                               User can re-enable tools
-                                                         ↓
-                                               Preferences saved to BBolt database
-                                                         ↓
-                                               Persist across restarts ✓
+MCPProxy v0.21.4 (personal) windows/amd64
 ```
+
+---
+
+### 3. Unit Tests ✅
+
+**File:** `internal/management/service_tool_preference_test.go`
+
+**Tests Added:**
+- `TestService_UpdateToolPreference_WithCustomFields`
+- `TestService_GetToolPreferences_WithCustomFields`
+- `TestService_UpdateToolPreference_OnlyCustomName`
+- `TestService_UpdateToolPreference_OnlyCustomDescription`
+- Mock storage and runtime helpers
+
+**Results:** All 4/4 tests passing ✅
+
+---
 
 ## Verification
 
 | Check | Status |
 |-------|--------|
-| Go build | ✓ PASS |
+| Go build (mcpproxy.exe) | ✓ PASS |
+| Go build (mcpproxy-tray.exe) | ✓ PASS |
 | Frontend build | ✓ PASS |
-| Tool preference storage tests | ✓ PASS |
+| Unit tests (custom tool prefs) | ✓ PASS (4/4) |
+| Windows release build | ✓ PASS |
+
+---
 
 ## Commands Run
 
 ```powershell
-# Build release
-.\scripts\build-release.ps1 -Version "v0.22.0"
+# Build Windows release
+scripts\build-release.bat v0.21.4
 
 # Verify build
-Expand-Archive releases\mcpproxy-0.22.0-windows-amd64.zip -DestinationPath releases\v0.22.0
-.\releases\v0.22.0\mcpproxy.exe --version
-# Output: MCPProxy v0.22.0 (personal) windows/amd64
+cd releases\test-extract
+mcpproxy.exe --version
+# Output: MCPProxy v0.21.4 (personal) windows/amd64
 
 # Run tests
-go test ./internal/storage/... -run ToolPref -v
+go test ./internal/management -run Custom -v
 ```
 
-## Fixes Applied
+---
 
-### Test Mock Update
-**File:** `internal/management/service_test.go`
+## Architecture Changes
 
-Added `GetAllServerTools` method to `mockRuntimeOperations` to fix test compilation errors:
-```go
-func (m *mockRuntimeOperations) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
-    if m.failOnServer != "" && serverName == m.failOnServer {
-        return nil, fmt.Errorf("server not found: %s", serverName)
-    }
-    if serverName == "" {
-        return nil, fmt.Errorf("server name required")
-    }
-    return []map[string]interface{}{
-        {"Name": "test_tool", "description": "A test tool", "enabled": true},
-        {"Name": "disabled_tool", "description": "A disabled tool", "enabled": false},
-    }, nil
-}
+### Custom Tool Names/Descriptions Flow
+
 ```
+User Action (UI/CLI/API)
+    ↓
+Management Service.UpdateToolPreference()
+    ↓
+Storage.SaveToolPreference() → BBolt DB (config.db)
+    ↓
+Runtime.GetServerTools()
+    ↓
+Apply custom name/description from storage
+    ↓
+Return tools with overridden names/descriptions
+    ↓
+AI Agent receives customized tools
+```
+
+### Key Design Decisions
+
+1. **Storage-First Approach:** Custom preferences stored in BBolt database, not config file
+2. **Runtime Application:** Custom names/descriptions applied at runtime when tools are retrieved
+3. **Backward Compatible:** Existing tools without preferences use original names/descriptions
+4. **Optional Fields:** Custom name and description are optional (omitempty)
+
+---
 
 ## Next Steps
 
-1. **Test tool disabling** - Manually verify disabled tools persist after restart
-2. **Test config file integration** - Verify `tool_preferences` in config.yaml work correctly
-3. **CLI completion** - Add `mcpproxy tools preferences` commands (already in CLI, verify works)
+### High Priority
+- [ ] Test end-to-end with running daemon
+- [ ] Verify custom names appear in AI agent tool calls
+- [ ] Test reset to defaults functionality
+
+### Medium Priority
+- [ ] Add tool preference export/import
+- [ ] Add bulk rename/describe operations
+- [ ] Add tool preference audit log
+
+### Low Priority
+- [ ] Add tool preference presets (save/load configurations)
+- [ ] Add tool usage analytics with custom names
+- [ ] Add localization support for tool descriptions
+
+---
 
 ## Key Learnings
 
-1. **Separate endpoint pattern** - For UI visibility vs runtime filtering, using `/tools` (filtered) vs `/tools/all` keeps concerns separated
-2. **BBolt storage** - Tool preferences stored in `~/.mcpproxy/config.db` bucket `tool_preferences`
-3. **Storage overrides config** - Runtime loads both config and storage preferences, storage takes precedence
+1. **Infrastructure Already Existed:** Storage layer had `CustomName` and `CustomDescription` fields, but they weren't wired through runtime layer
+2. **Minimal Runtime Changes:** Only needed to modify `GetServerTools()` and `GetAllServerTools()` to apply preferences
+3. **UI Pattern:** Modal approach better than inline editing for longer descriptions
+4. **Build Script:** PowerShell already existed (`build-release.ps1`), added batch version for broader compatibility
+
+---
 
 ## Related Documentation
 
-- Storage layer: `internal/storage/bbolt.go`, `internal/storage/manager.go`
-- Tool preferences: `internal/storage/models.go` (ToolPreferenceRecord)
-- Runtime integration: `internal/runtime/runtime.go` (GetServerTools, GetAllServerTools)
-- API handlers: `internal/httpapi/server.go` (handleGetServerTools, handleGetAllServerTools)
+- Backend: `internal/runtime/runtime.go`, `internal/management/service.go`
+- Storage: `internal/storage/models.go` (ToolPreferenceRecord)
+- HTTP API: `internal/httpapi/server.go` (handleUpdateToolPreference)
+- CLI: `cmd/mcpproxy/tools_cmd.go`
+- Frontend: `frontend/src/components/EditToolModal.vue`, `frontend/src/views/ServerDetail.vue`
+- Build: `scripts/build-release.bat`
