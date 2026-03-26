@@ -714,19 +714,40 @@
                       />
                     </div>
                     <div class="flex flex-col items-end gap-2 ml-4">
-                      <div class="form-control">
-                        <label class="label cursor-pointer gap-2 py-0">
-                          <span class="label-text text-xs">{{
-                            isToolEnabled(tool.name) ? "Enabled" : "Disabled"
-                          }}</span>
-                          <input
-                            type="checkbox"
-                            :checked="isToolEnabled(tool.name)"
-                            @change="toggleToolEnabled(tool.name)"
-                            class="toggle toggle-sm"
-                            :disabled="toolPreferenceLoading === tool.name"
-                          />
-                        </label>
+                      <div class="flex items-center gap-2">
+                        <button
+                          class="btn btn-ghost btn-xs"
+                          @click="openEditTool(tool)"
+                          title="Edit tool name and description"
+                        >
+                          <svg
+                            class="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
+                          </svg>
+                        </button>
+                        <div class="form-control">
+                          <label class="label cursor-pointer gap-2 py-0">
+                            <span class="label-text text-xs">{{
+                              isToolEnabled(tool.name) ? "Enabled" : "Disabled"
+                            }}</span>
+                            <input
+                              type="checkbox"
+                              :checked="isToolEnabled(tool.name)"
+                              @change="toggleToolEnabled(tool.name)"
+                              class="toggle toggle-sm"
+                              :disabled="toolPreferenceLoading === tool.name"
+                            />
+                          </label>
+                        </div>
                       </div>
                       <span
                         v-if="toolPreferenceLoading === tool.name"
@@ -1675,6 +1696,22 @@
       </div>
     </div>
 
+    <!-- Edit Tool Modal -->
+    <EditToolModal
+      :show="showEditTool"
+      :server-name="server!.name"
+      :tool-name="selectedToolForEdit?.name || ''"
+      :preference="
+        selectedToolForEdit
+          ? toolPreferences[selectedToolForEdit.name] || null
+          : null
+      "
+      :original-description="selectedToolForEdit?.description"
+      @close="showEditTool = false"
+      @save="handleSaveToolEdit"
+      @reset="handleResetToolEdit"
+    />
+
     <!-- Hints Panel (Bottom of Page) -->
     <CollapsibleHintsPanel :hints="serverDetailHints" />
   </div>
@@ -1688,6 +1725,7 @@ import { useSystemStore } from '@/stores/system'
 import CollapsibleHintsPanel from '@/components/CollapsibleHintsPanel.vue'
 import AnnotationBadges from '@/components/AnnotationBadges.vue'
 import ErrorPanel from '@/components/diagnostics/ErrorPanel.vue'
+import EditToolModal from '@/components/EditToolModal.vue'
 import type { Hint } from '@/components/CollapsibleHintsPanel.vue'
 import type { Server, Tool, ToolApproval, SecurityScanReport, ToolPreference } from '@/types'
 import api from '@/services/api'
@@ -1724,6 +1762,10 @@ const approvalLoading = ref(false)
 // Tool preferences
 const toolPreferences = ref<Record<string, ToolPreference>>({})
 const toolPreferenceLoading = ref<string | null>(null)
+
+// Edit tool modal
+const showEditTool = ref(false)
+const selectedToolForEdit = ref<Tool | null>(null)
 
 const quarantinedTools = computed(() => {
   return toolApprovals.value.filter(t => t.status === 'pending' || t.status === 'changed')
@@ -2721,6 +2763,83 @@ async function cancelSecurityScan() {
   }
 }
 
+
+function openEditTool(tool: Tool) {
+  selectedToolForEdit.value = tool
+  showEditTool.value = true
+}
+
+async function handleSaveToolEdit(update: { enabled: boolean; custom_name?: string; custom_description?: string }) {
+  if (!selectedToolForEdit.value) return
+
+  toolPreferenceLoading.value = selectedToolForEdit.value.name
+  try {
+    const response = await api.updateToolPreferenceFull(
+      props.serverName,
+      selectedToolForEdit.value.name,
+      update
+    )
+
+    if (response.data) {
+      // Update local preferences
+      if (response.data.enabled) {
+        delete toolPreferences.value[selectedToolForEdit.value.name]
+      } else {
+        toolPreferences.value[selectedToolForEdit.value.name] = response.data
+      }
+
+      // Reload tools to get updated names/descriptions
+      await loadTools()
+
+      systemStore.addToast({
+        type: 'success',
+        title: 'Tool Updated',
+        message: 'Tool preferences saved successfully',
+      })
+    }
+  } catch (error) {
+    console.error('Failed to update tool preference:', error)
+    systemStore.addToast({
+      type: 'error',
+      title: 'Update Failed',
+      message: 'Failed to update tool preferences',
+    })
+  } finally {
+    toolPreferenceLoading.value = null
+    showEditTool.value = false
+    selectedToolForEdit.value = null
+  }
+}
+
+async function handleResetToolEdit() {
+  if (!selectedToolForEdit.value) return
+
+  try {
+    await api.deleteToolPreference(props.serverName, selectedToolForEdit.value.name)
+
+    // Remove from local preferences
+    delete toolPreferences.value[selectedToolForEdit.value.name]
+
+    // Reload tools to get original names/descriptions
+    await loadTools()
+
+    systemStore.addToast({
+      type: 'success',
+      title: 'Tool Reset',
+      message: 'Tool preferences reset to defaults',
+    })
+
+    showEditTool.value = false
+    selectedToolForEdit.value = null
+  } catch (error) {
+    console.error('Failed to reset tool preference:', error)
+    systemStore.addToast({
+      type: 'error',
+      title: 'Reset Failed',
+      message: 'Failed to reset tool preferences',
+    })
+  }
+}
 
 // Server detail hints
 const serverDetailHints = computed<Hint[]>(() => {

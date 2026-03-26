@@ -139,6 +139,10 @@ func init() {
 	// Note: -o/--output flag is inherited from root command via globalOutputFormat
 	toolsListCmd.Flags().BoolVar(&traceTransport, "trace-transport", false, "Enable detailed HTTP/SSE frame-by-frame tracing (useful for debugging SSE connection issues)")
 
+	// Add server flag for preferences list command
+	toolsPrefsListCmd.Flags().StringVarP(&serverName, "server", "s", "", "Name of the upstream server (required)")
+	toolsPrefsListCmd.MarkFlagRequired("server")
+
 	// Mark required flags
 	err := toolsListCmd.MarkFlagRequired("server")
 	if err != nil {

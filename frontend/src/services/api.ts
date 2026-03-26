@@ -300,6 +300,17 @@ class APIService {
     })
   }
 
+  async updateToolPreferenceFull(
+    serverName: string,
+    toolName: string,
+    update: { enabled: boolean; custom_name?: string; custom_description?: string }
+  ): Promise<APIResponse<ToolPreference>> {
+    return this.request<ToolPreference>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools/preferences/${encodeURIComponent(toolName)}`, {
+      method: 'PUT',
+      body: JSON.stringify(update),
+    })
+  }
+
   async deleteToolPreference(serverName: string, toolName: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools/preferences/${encodeURIComponent(toolName)}`, {
       method: 'DELETE',
