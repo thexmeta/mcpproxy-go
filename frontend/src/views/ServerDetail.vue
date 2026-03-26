@@ -8,22 +8,40 @@
 
     <!-- Error State -->
     <div v-else-if="error" class="alert alert-error">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <svg
+        class="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
       </svg>
       <div>
         <h3 class="font-bold">Failed to load server details</h3>
         <div class="text-sm">{{ error }}</div>
       </div>
-      <button @click="loadServerDetails" class="btn btn-sm">
-        Try Again
-      </button>
+      <button @click="loadServerDetails" class="btn btn-sm">Try Again</button>
     </div>
 
     <!-- Server Not Found -->
     <div v-else-if="!server" class="text-center py-12">
-      <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+      <svg
+        class="w-16 h-16 mx-auto mb-4 opacity-50"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"
+        />
       </svg>
       <h3 class="text-xl font-semibold mb-2">Server not found</h3>
       <p class="text-base-content/70 mb-4">
@@ -37,7 +55,9 @@
     <!-- Server Details -->
     <div v-else>
       <!-- Header -->
-      <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+      <div
+        class="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4"
+      >
         <div>
           <div class="breadcrumbs text-sm mb-2">
             <ul>
@@ -46,61 +66,110 @@
             </ul>
           </div>
           <h1 class="text-3xl font-bold">{{ server.name }}</h1>
-          <p class="text-base-content/70 mt-1">{{ server.protocol }} • {{ server.url || server.command || 'No endpoint' }}</p>
+          <p class="text-base-content/70 mt-1">
+            {{ server.protocol }} •
+            {{ server.url || server.command || "No endpoint" }}
+          </p>
         </div>
 
         <div class="flex items-center space-x-2">
           <div
             :class="[
               'badge badge-lg',
-              server.connected ? 'badge-success' :
-              server.connecting ? 'badge-warning' :
-              'badge-error'
+              server.connected
+                ? 'badge-success'
+                : server.connecting
+                  ? 'badge-warning'
+                  : 'badge-error',
             ]"
           >
-            {{ server.connected ? 'Connected' : server.connecting ? 'Connecting' : 'Disconnected' }}
+            {{
+              server.connected
+                ? "Connected"
+                : server.connecting
+                  ? "Connecting"
+                  : "Disconnected"
+            }}
           </div>
           <div class="dropdown dropdown-end">
             <div tabindex="0" role="button" class="btn btn-outline">
               Actions
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </div>
-            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+            <ul
+              tabindex="0"
+              class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow"
+            >
               <li>
                 <button @click="toggleEnabled" :disabled="actionLoading">
-                  <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
-                  {{ server.enabled ? 'Disable' : 'Enable' }}
+                  <span
+                    v-if="actionLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                  {{ server.enabled ? "Disable" : "Enable" }}
                 </button>
               </li>
               <li v-if="server.enabled">
                 <button @click="restartServer" :disabled="actionLoading">
-                  <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
-                  {{ isHttpProtocol ? 'Reconnect' : 'Restart' }}
+                  <span
+                    v-if="actionLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                  {{ isHttpProtocol ? "Reconnect" : "Restart" }}
                 </button>
               </li>
               <li v-if="healthAction === 'login'">
                 <button @click="triggerOAuth" :disabled="actionLoading">
-                  <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
+                  <span
+                    v-if="actionLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
                   Login
                 </button>
               </li>
               <li v-if="server.enabled && server.connected">
                 <button @click="discoverTools" :disabled="actionLoading">
-                  <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
+                  <span
+                    v-if="actionLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
                   Discover Tools
                 </button>
               </li>
               <li>
-                <button @click="server.quarantined ? handleApproveClick() : quarantineServer()" :disabled="actionLoading">
-                  <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
-                  {{ server.quarantined ? 'Approve' : 'Quarantine' }}
+                <button
+                  @click="
+                    server.quarantined
+                      ? handleApproveClick()
+                      : quarantineServer()
+                  "
+                  :disabled="actionLoading"
+                >
+                  <span
+                    v-if="actionLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                  {{ server.quarantined ? "Approve" : "Quarantine" }}
                 </button>
               </li>
               <li>
                 <button @click="refreshData" :disabled="actionLoading">
-                  <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
+                  <span
+                    v-if="actionLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
                   Refresh
                 </button>
               </li>
@@ -114,8 +183,18 @@
         <div class="stats shadow bg-base-100">
           <div class="stat">
             <div class="stat-figure text-primary">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <svg
+                class="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
               </svg>
             </div>
             <div class="stat-title">Tools</div>
@@ -127,21 +206,45 @@
         <div class="stats shadow bg-base-100">
           <div class="stat">
             <div class="stat-figure text-secondary">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <div class="stat-title">Status</div>
-            <div class="stat-value text-sm">{{ server.enabled ? 'Enabled' : 'Disabled' }}</div>
-            <div class="stat-desc">{{ server.quarantined ? 'Quarantined' : 'Active' }}</div>
+            <div class="stat-value text-sm">
+              {{ server.enabled ? "Enabled" : "Disabled" }}
+            </div>
+            <div class="stat-desc">
+              {{ server.quarantined ? "Quarantined" : "Active" }}
+            </div>
           </div>
         </div>
 
         <div class="stats shadow bg-base-100">
           <div class="stat">
             <div class="stat-figure text-info">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <svg
+                class="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
               </svg>
             </div>
             <div class="stat-title">Protocol</div>
@@ -153,13 +256,29 @@
         <div class="stats shadow bg-base-100">
           <div class="stat">
             <div class="stat-figure text-warning">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <div class="stat-title">Connection</div>
             <div class="stat-value text-sm">
-              {{ server.connected ? 'Online' : server.connecting ? 'Connecting' : 'Offline' }}
+              {{
+                server.connected
+                  ? "Online"
+                  : server.connecting
+                    ? "Connecting"
+                    : "Offline"
+              }}
             </div>
             <div class="stat-desc">current state</div>
           </div>
@@ -179,8 +298,18 @@
         />
 
         <div v-else-if="server.last_error" class="alert alert-error">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div>
             <h3 class="font-bold">Server Error</h3>
@@ -189,15 +318,35 @@
         </div>
 
         <div v-if="server.quarantined" class="alert alert-warning">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
           </svg>
           <div>
             <h3 class="font-bold">Security Quarantine</h3>
-            <div class="text-sm">This server is quarantined and requires manual approval before tools can be executed.</div>
+            <div class="text-sm">
+              This server is quarantined and requires manual approval before
+              tools can be executed.
+            </div>
           </div>
-          <button @click="handleApproveClick" :disabled="actionLoading" class="btn btn-sm btn-warning">
-            <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
+          <button
+            @click="handleApproveClick"
+            :disabled="actionLoading"
+            class="btn btn-sm btn-warning"
+          >
+            <span
+              v-if="actionLoading"
+              class="loading loading-spinner loading-xs"
+            ></span>
             Approve
           </button>
         </div>
@@ -207,18 +356,29 @@
       <div v-if="showApproveConfirmation" class="modal modal-open">
         <div class="modal-box">
           <h3 class="font-bold text-lg mb-4">
-            {{ approveDialogMode === 'no_scan' ? 'No Security Scan Run' : 'Critical Findings Detected' }}
+            {{
+              approveDialogMode === "no_scan"
+                ? "No Security Scan Run"
+                : "Critical Findings Detected"
+            }}
           </h3>
           <p v-if="approveDialogMode === 'critical'" class="mb-4">
             <strong>{{ server.name }}</strong> has
-            <span class="text-error font-semibold">{{ criticalFindingCount }} critical finding{{ criticalFindingCount === 1 ? '' : 's' }}</span>
-            in its most recent security scan. Approving will allow this server to run despite these warnings.
+            <span class="text-error font-semibold"
+              >{{ criticalFindingCount }} critical finding{{
+                criticalFindingCount === 1 ? "" : "s"
+              }}</span
+            >
+            in its most recent security scan. Approving will allow this server
+            to run despite these warnings.
           </p>
           <p v-else class="mb-4">
-            No security scan has been run for <strong>{{ server.name }}</strong>. We strongly recommend running a scan first.
+            No security scan has been run for <strong>{{ server.name }}</strong
+            >. We strongly recommend running a scan first.
           </p>
           <p class="text-sm text-base-content/70 mb-6">
-            The security scanner is an experimental heuristic. Force-approving bypasses the scanner gate.
+            The security scanner is an experimental heuristic. Force-approving
+            bypasses the scanner gate.
           </p>
           <div class="modal-action">
             <button
@@ -241,7 +401,10 @@
               :disabled="actionLoading"
               class="btn btn-error"
             >
-              <span v-if="actionLoading" class="loading loading-spinner loading-xs"></span>
+              <span
+                v-if="actionLoading"
+                class="loading loading-spinner loading-xs"
+              ></span>
               Force Approve
             </button>
           </div>
@@ -271,7 +434,11 @@
         <button
           v-if="hasEnabledScanners()"
           :class="['tab tab-lg', activeTab === 'security' ? 'tab-active' : '']"
-          @click="activeTab = 'security'; loadScannerNames(); loadScanReport()"
+          @click="
+            activeTab = 'security';
+            loadScannerNames();
+            loadScanReport();
+          "
         >
           <span class="flex items-center gap-2">
             <span
@@ -298,33 +465,71 @@
           </div>
 
           <div v-else-if="toolsError" class="alert alert-error">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <span>{{ toolsError }}</span>
             <button @click="loadTools" class="btn btn-sm">Retry</button>
           </div>
 
           <div v-else-if="serverTools.length === 0" class="text-center py-8">
-            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <svg
+              class="w-16 h-16 mx-auto mb-4 opacity-50"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
             </svg>
             <h3 class="text-xl font-semibold mb-2">No tools available</h3>
             <p class="text-base-content/70">
-              {{ server.connected ? 'This server has no tools available.' : 'Server must be connected to view tools.' }}
+              {{
+                server.connected
+                  ? "This server has no tools available."
+                  : "Server must be connected to view tools."
+              }}
             </p>
           </div>
 
           <div v-else class="space-y-4">
             <!-- Tool Quarantine Panel (Spec 032) -->
-            <div v-if="quarantinedTools.length > 0" class="alert alert-warning shadow-lg mb-4">
-              <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <div
+              v-if="quarantinedTools.length > 0"
+              class="alert alert-warning shadow-lg mb-4"
+            >
+              <svg
+                class="w-6 h-6 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
               <div class="flex-1">
                 <h3 class="font-bold">Tool Quarantine</h3>
                 <div class="text-sm">
-                  {{ quarantinedTools.length }} tool(s) require approval before they can be used by AI agents.
+                  {{ quarantinedTools.length }} tool(s) require approval before
+                  they can be used by AI agents.
                 </div>
               </div>
               <button
@@ -332,7 +537,10 @@
                 :disabled="approvalLoading"
                 class="btn btn-sm btn-warning"
               >
-                <span v-if="approvalLoading" class="loading loading-spinner loading-xs"></span>
+                <span
+                  v-if="approvalLoading"
+                  class="loading loading-spinner loading-xs"
+                ></span>
                 Approve All
               </button>
             </div>
@@ -343,7 +551,9 @@
                 v-for="tool in quarantinedTools"
                 :key="'q-' + tool.tool_name"
                 class="card bg-base-200 border-l-4"
-                :class="tool.status === 'changed' ? 'border-error' : 'border-warning'"
+                :class="
+                  tool.status === 'changed' ? 'border-error' : 'border-warning'
+                "
               >
                 <div class="card-body py-3 px-4">
                   <div class="flex items-center justify-between">
@@ -352,32 +562,82 @@
                         <h4 class="font-semibold">{{ tool.tool_name }}</h4>
                         <span
                           class="badge badge-sm"
-                          :class="tool.status === 'changed' ? 'badge-error' : 'badge-warning'"
+                          :class="
+                            tool.status === 'changed'
+                              ? 'badge-error'
+                              : 'badge-warning'
+                          "
                         >
                           {{ tool.status }}
                         </span>
                       </div>
                       <p
-                        v-if="tool.status !== 'changed' || !tool.previous_description"
+                        v-if="
+                          tool.status !== 'changed' ||
+                          !tool.previous_description
+                        "
                         class="text-sm text-base-content/70 mt-1"
-                      >{{ tool.description }}</p>
+                      >
+                        {{ tool.description }}
+                      </p>
                       <!-- Show before/after diff for changed tools -->
-                      <div v-if="tool.status === 'changed' && tool.previous_description" class="mt-2 space-y-2 text-xs">
+                      <div
+                        v-if="
+                          tool.status === 'changed' && tool.previous_description
+                        "
+                        class="mt-2 space-y-2 text-xs"
+                      >
                         <div>
-                          <div class="text-[10px] font-semibold uppercase tracking-wide text-base-content/60 mb-1">Before (approved)</div>
-                          <div class="bg-error/5 border border-error/20 px-2 py-1.5 rounded font-mono leading-relaxed">
-                            <template v-for="(part, i) in computeWordDiff(tool.previous_description, tool.current_description || tool.description)" :key="'b'+i">
-                              <span v-if="part.type === 'removed'" class="bg-error/20 text-error font-semibold px-0.5 rounded">{{ part.text }}</span>
-                              <span v-else-if="part.type === 'same'">{{ part.text }}</span>
+                          <div
+                            class="text-[10px] font-semibold uppercase tracking-wide text-base-content/60 mb-1"
+                          >
+                            Before (approved)
+                          </div>
+                          <div
+                            class="bg-error/5 border border-error/20 px-2 py-1.5 rounded font-mono leading-relaxed"
+                          >
+                            <template
+                              v-for="(part, i) in computeWordDiff(
+                                tool.previous_description,
+                                tool.current_description || tool.description,
+                              )"
+                              :key="'b' + i"
+                            >
+                              <span
+                                v-if="part.type === 'removed'"
+                                class="bg-error/20 text-error font-semibold px-0.5 rounded"
+                                >{{ part.text }}</span
+                              >
+                              <span v-else-if="part.type === 'same'">{{
+                                part.text
+                              }}</span>
                             </template>
                           </div>
                         </div>
                         <div>
-                          <div class="text-[10px] font-semibold uppercase tracking-wide text-base-content/60 mb-1">After (current)</div>
-                          <div class="bg-success/5 border border-success/20 px-2 py-1.5 rounded font-mono leading-relaxed">
-                            <template v-for="(part, i) in computeWordDiff(tool.previous_description, tool.current_description || tool.description)" :key="'a'+i">
-                              <span v-if="part.type === 'added'" class="bg-success/20 text-success font-semibold px-0.5 rounded">{{ part.text }}</span>
-                              <span v-else-if="part.type === 'same'">{{ part.text }}</span>
+                          <div
+                            class="text-[10px] font-semibold uppercase tracking-wide text-base-content/60 mb-1"
+                          >
+                            After (current)
+                          </div>
+                          <div
+                            class="bg-success/5 border border-success/20 px-2 py-1.5 rounded font-mono leading-relaxed"
+                          >
+                            <template
+                              v-for="(part, i) in computeWordDiff(
+                                tool.previous_description,
+                                tool.current_description || tool.description,
+                              )"
+                              :key="'a' + i"
+                            >
+                              <span
+                                v-if="part.type === 'added'"
+                                class="bg-success/20 text-success font-semibold px-0.5 rounded"
+                                >{{ part.text }}</span
+                              >
+                              <span v-else-if="part.type === 'same'">{{
+                                part.text
+                              }}</span>
                             </template>
                           </div>
                         </div>
@@ -398,7 +658,9 @@
             <div class="flex justify-between items-center">
               <div>
                 <h3 class="text-lg font-semibold">Available Tools</h3>
-                <p class="text-base-content/70">Tools provided by {{ server.name }}</p>
+                <p class="text-base-content/70">
+                  Tools provided by {{ server.name }}
+                </p>
               </div>
               <div class="form-control">
                 <input
@@ -415,6 +677,7 @@
                 v-for="tool in filteredTools"
                 :key="tool.name"
                 class="card bg-base-100 shadow-md"
+                :class="{ 'opacity-50': !isToolEnabled(tool.name) }"
               >
                 <div class="card-body">
                   <div class="flex items-center gap-2">
@@ -422,21 +685,59 @@
                     <span
                       v-if="getToolApprovalStatus(tool.name) === 'pending'"
                       class="badge badge-info badge-sm"
-                    >new</span>
+                      >new</span
+                    >
                     <span
                       v-else-if="getToolApprovalStatus(tool.name) === 'changed'"
                       class="badge badge-warning badge-sm"
-                    >changed</span>
+                      >changed</span
+                    >
                   </div>
                   <p class="text-sm text-base-content/70">
-                    {{ tool.description || 'No description available' }}
+                    {{ tool.description || "No description available" }}
                   </p>
                   <AnnotationBadges
                     v-if="tool.annotations"
                     :annotations="tool.annotations"
                     class="mt-2"
                   />
-                  <div v-if="tool.input_schema" class="card-actions justify-end mt-4">
+                  <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                      <h4 class="card-title text-lg">{{ tool.name }}</h4>
+                      <p class="text-sm text-base-content/70">
+                        {{ tool.description || "No description available" }}
+                      </p>
+                      <AnnotationBadges
+                        v-if="tool.annotations"
+                        :annotations="tool.annotations"
+                        class="mt-2"
+                      />
+                    </div>
+                    <div class="flex flex-col items-end gap-2 ml-4">
+                      <div class="form-control">
+                        <label class="label cursor-pointer gap-2 py-0">
+                          <span class="label-text text-xs">{{
+                            isToolEnabled(tool.name) ? "Enabled" : "Disabled"
+                          }}</span>
+                          <input
+                            type="checkbox"
+                            :checked="isToolEnabled(tool.name)"
+                            @change="toggleToolEnabled(tool.name)"
+                            class="toggle toggle-sm"
+                            :disabled="toolPreferenceLoading === tool.name"
+                          />
+                        </label>
+                      </div>
+                      <span
+                        v-if="toolPreferenceLoading === tool.name"
+                        class="loading loading-spinner loading-xs"
+                      ></span>
+                    </div>
+                  </div>
+                  <div
+                    v-if="tool.input_schema"
+                    class="card-actions justify-end mt-4"
+                  >
                     <button
                       class="btn btn-sm btn-outline"
                       @click="viewToolSchema(tool)"
@@ -455,17 +756,29 @@
           <div class="flex justify-between items-center mb-4">
             <div>
               <h3 class="text-lg font-semibold">Server Logs</h3>
-              <p class="text-base-content/70">Recent log entries for {{ server.name }}</p>
+              <p class="text-base-content/70">
+                Recent log entries for {{ server.name }}
+              </p>
             </div>
             <div class="flex items-center space-x-2">
-              <select v-model="logTail" class="select select-bordered select-sm">
+              <select
+                v-model="logTail"
+                class="select select-bordered select-sm"
+              >
                 <option :value="50">Last 50 lines</option>
                 <option :value="100">Last 100 lines</option>
                 <option :value="200">Last 200 lines</option>
                 <option :value="500">Last 500 lines</option>
               </select>
-              <button @click="loadLogs" class="btn btn-sm btn-outline" :disabled="logsLoading">
-                <span v-if="logsLoading" class="loading loading-spinner loading-xs"></span>
+              <button
+                @click="loadLogs"
+                class="btn btn-sm btn-outline"
+                :disabled="logsLoading"
+              >
+                <span
+                  v-if="logsLoading"
+                  class="loading loading-spinner loading-xs"
+                ></span>
                 Refresh
               </button>
             </div>
@@ -477,23 +790,49 @@
           </div>
 
           <div v-else-if="logsError" class="alert alert-error">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <span>{{ logsError }}</span>
             <button @click="loadLogs" class="btn btn-sm">Retry</button>
           </div>
 
           <div v-else-if="serverLogs.length === 0" class="text-center py-8">
-            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <svg
+              class="w-16 h-16 mx-auto mb-4 opacity-50"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
             </svg>
             <h3 class="text-xl font-semibold mb-2">No logs available</h3>
-            <p class="text-base-content/70">No log entries found for this server.</p>
+            <p class="text-base-content/70">
+              No log entries found for this server.
+            </p>
           </div>
 
           <div v-else class="mockup-code max-h-96 overflow-y-auto">
-            <pre v-for="(line, index) in serverLogs" :key="index" class="text-xs"><code>{{ line }}</code></pre>
+            <pre
+              v-for="(line, index) in serverLogs"
+              :key="index"
+              class="text-xs"
+            ><code>{{ line }}</code></pre>
           </div>
         </div>
 
@@ -509,11 +848,17 @@
             <div class="card bg-base-100 shadow-sm">
               <div class="card-body py-4">
                 <h3 class="card-title text-base">General</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <dt class="text-base-content/60">Name</dt>
                   <dd class="font-medium">{{ server.name }}</dd>
                   <dt class="text-base-content/60">Protocol</dt>
-                  <dd><code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{{ server.protocol }}</code></dd>
+                  <dd>
+                    <code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{{
+                      server.protocol
+                    }}</code>
+                  </dd>
                   <dt class="text-base-content/60">Enabled</dt>
                   <dd class="flex items-center gap-2">
                     <input
@@ -523,12 +868,20 @@
                       class="toggle toggle-sm"
                       :disabled="actionLoading"
                     />
-                    <span class="text-base-content/70">{{ server.enabled ? 'Yes' : 'No' }}</span>
+                    <span class="text-base-content/70">{{
+                      server.enabled ? "Yes" : "No"
+                    }}</span>
                   </dd>
                   <dt class="text-base-content/60">Quarantined</dt>
                   <dd>
-                    <span :class="server.quarantined ? 'badge badge-warning badge-sm' : 'badge badge-ghost badge-sm'">
-                      {{ server.quarantined ? 'Yes' : 'No' }}
+                    <span
+                      :class="
+                        server.quarantined
+                          ? 'badge badge-warning badge-sm'
+                          : 'badge badge-ghost badge-sm'
+                      "
+                    >
+                      {{ server.quarantined ? "Yes" : "No" }}
                     </span>
                   </dd>
                 </dl>
@@ -539,9 +892,16 @@
             <div v-if="server.url" class="card bg-base-100 shadow-sm">
               <div class="card-body py-4">
                 <h3 class="card-title text-base">Connection</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <dt class="text-base-content/60">URL</dt>
-                  <dd><code class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all">{{ server.url }}</code></dd>
+                  <dd>
+                    <code
+                      class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all"
+                      >{{ server.url }}</code
+                    >
+                  </dd>
                 </dl>
               </div>
             </div>
@@ -550,16 +910,32 @@
             <div v-if="server.command" class="card bg-base-100 shadow-sm">
               <div class="card-body py-4">
                 <h3 class="card-title text-base">Process</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <dt class="text-base-content/60">Command</dt>
-                  <dd><code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{{ server.command }}</code></dd>
+                  <dd>
+                    <code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{{
+                      server.command
+                    }}</code>
+                  </dd>
                   <template v-if="server.args && server.args.length">
                     <dt class="text-base-content/60">Args</dt>
-                    <dd><code class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all">{{ server.args.join(' ') }}</code></dd>
+                    <dd>
+                      <code
+                        class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all"
+                        >{{ server.args.join(" ") }}</code
+                      >
+                    </dd>
                   </template>
                   <template v-if="server.working_dir">
                     <dt class="text-base-content/60">Working Dir</dt>
-                    <dd><code class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all">{{ server.working_dir }}</code></dd>
+                    <dd>
+                      <code
+                        class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all"
+                        >{{ server.working_dir }}</code
+                      >
+                    </dd>
                   </template>
                 </dl>
               </div>
@@ -568,12 +944,19 @@
             <!-- Environment Variables: keys are listed; values masked to avoid
                  shoulder-surfing leaks. Users can edit values via the dedicated
                  Edit page if they need to inspect them. -->
-            <div v-if="server.env && Object.keys(server.env).length" class="card bg-base-100 shadow-sm">
+            <div
+              v-if="server.env && Object.keys(server.env).length"
+              class="card bg-base-100 shadow-sm"
+            >
               <div class="card-body py-4">
                 <h3 class="card-title text-base">Environment Variables</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <template v-for="(v, k) in server.env" :key="k">
-                    <dt><code class="font-mono text-xs">{{ k }}</code></dt>
+                    <dt>
+                      <code class="font-mono text-xs">{{ k }}</code>
+                    </dt>
                     <dd class="text-base-content/60">{{ maskEnvValue(v) }}</dd>
                   </template>
                 </dl>
@@ -587,29 +970,72 @@
             <div v-if="hasIsolationData" class="card bg-base-100 shadow-sm">
               <div class="card-body py-4">
                 <h3 class="card-title text-base">Docker Isolation Overrides</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <dt class="text-base-content/60">Image</dt>
                   <dd>
-                    <code v-if="server.isolation?.image" class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all">{{ server.isolation.image }}</code>
-                    <span v-else-if="server.isolation_defaults?.image" class="text-base-content/40 text-xs italic">default: {{ server.isolation_defaults.image }}</span>
+                    <code
+                      v-if="server.isolation?.image"
+                      class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all"
+                      >{{ server.isolation.image }}</code
+                    >
+                    <span
+                      v-else-if="server.isolation_defaults?.image"
+                      class="text-base-content/40 text-xs italic"
+                      >default: {{ server.isolation_defaults.image }}</span
+                    >
                     <span v-else class="text-base-content/40 text-xs">—</span>
                   </dd>
                   <dt class="text-base-content/60">Network Mode</dt>
                   <dd>
-                    <span v-if="server.isolation?.network_mode" class="badge badge-outline badge-sm">{{ server.isolation.network_mode }}</span>
-                    <span v-else-if="server.isolation_defaults?.network_mode" class="text-base-content/40 text-xs italic">default: {{ server.isolation_defaults.network_mode }}</span>
+                    <span
+                      v-if="server.isolation?.network_mode"
+                      class="badge badge-outline badge-sm"
+                      >{{ server.isolation.network_mode }}</span
+                    >
+                    <span
+                      v-else-if="server.isolation_defaults?.network_mode"
+                      class="text-base-content/40 text-xs italic"
+                      >default:
+                      {{ server.isolation_defaults.network_mode }}</span
+                    >
                     <span v-else class="text-base-content/40 text-xs">—</span>
                   </dd>
                   <dt class="text-base-content/60">Extra Args</dt>
                   <dd>
-                    <code v-if="server.isolation?.extra_args && server.isolation.extra_args.length" class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all">{{ server.isolation.extra_args.join(' ') }}</code>
-                    <span v-else-if="server.isolation_defaults?.extra_args && server.isolation_defaults.extra_args.length" class="text-base-content/40 text-xs italic">default: {{ server.isolation_defaults.extra_args.join(' ') }}</span>
+                    <code
+                      v-if="
+                        server.isolation?.extra_args &&
+                        server.isolation.extra_args.length
+                      "
+                      class="bg-base-200 px-1.5 py-0.5 rounded text-xs break-all"
+                      >{{ server.isolation.extra_args.join(" ") }}</code
+                    >
+                    <span
+                      v-else-if="
+                        server.isolation_defaults?.extra_args &&
+                        server.isolation_defaults.extra_args.length
+                      "
+                      class="text-base-content/40 text-xs italic"
+                      >default:
+                      {{ server.isolation_defaults.extra_args.join(" ") }}</span
+                    >
                     <span v-else class="text-base-content/40 text-xs">—</span>
                   </dd>
                   <dt class="text-base-content/60">Container Working Dir</dt>
                   <dd>
-                    <code v-if="server.isolation?.working_dir" class="bg-base-200 px-1.5 py-0.5 rounded text-xs">{{ server.isolation.working_dir }}</code>
-                    <span v-else-if="server.isolation_defaults?.working_dir" class="text-base-content/40 text-xs italic">default: {{ server.isolation_defaults.working_dir }}</span>
+                    <code
+                      v-if="server.isolation?.working_dir"
+                      class="bg-base-200 px-1.5 py-0.5 rounded text-xs"
+                      >{{ server.isolation.working_dir }}</code
+                    >
+                    <span
+                      v-else-if="server.isolation_defaults?.working_dir"
+                      class="text-base-content/40 text-xs italic"
+                      >default:
+                      {{ server.isolation_defaults.working_dir }}</span
+                    >
                     <span v-else class="text-base-content/40 text-xs">—</span>
                   </dd>
                   <template v-if="server.isolation?.memory_limit">
@@ -622,7 +1048,11 @@
                   </template>
                   <template v-if="server.isolation_defaults?.runtime_type">
                     <dt class="text-base-content/60">Runtime</dt>
-                    <dd><span class="badge badge-ghost badge-sm">{{ server.isolation_defaults.runtime_type }}</span></dd>
+                    <dd>
+                      <span class="badge badge-ghost badge-sm">{{
+                        server.isolation_defaults.runtime_type
+                      }}</span>
+                    </dd>
                   </template>
                 </dl>
               </div>
@@ -632,11 +1062,19 @@
             <div class="card bg-base-100 shadow-sm">
               <div class="card-body py-4">
                 <h3 class="card-title text-base">Status</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <dt class="text-base-content/60">Connected</dt>
                   <dd>
-                    <span :class="server.connected ? 'badge badge-success badge-sm' : 'badge badge-ghost badge-sm'">
-                      {{ server.connected ? 'Yes' : 'No' }}
+                    <span
+                      :class="
+                        server.connected
+                          ? 'badge badge-success badge-sm'
+                          : 'badge badge-ghost badge-sm'
+                      "
+                    >
+                      {{ server.connected ? "Yes" : "No" }}
                     </span>
                   </dd>
                   <template v-if="server.connected_at">
@@ -655,7 +1093,9 @@
                   </template>
                   <template v-if="server.last_error">
                     <dt class="text-base-content/60">Last Error</dt>
-                    <dd class="text-error/80 break-words whitespace-pre-wrap">{{ server.last_error }}</dd>
+                    <dd class="text-error/80 break-words whitespace-pre-wrap">
+                      {{ server.last_error }}
+                    </dd>
                   </template>
                 </dl>
               </div>
@@ -665,22 +1105,38 @@
             <div v-if="server.health" class="card bg-base-100 shadow-sm">
               <div class="card-body py-4">
                 <h3 class="card-title text-base">Health</h3>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm">
+                <dl
+                  class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 mt-2 text-sm"
+                >
                   <dt class="text-base-content/60">Level</dt>
                   <dd>
-                    <span :class="healthLevelBadgeClass(server.health.level)">{{ server.health.level }}</span>
+                    <span :class="healthLevelBadgeClass(server.health.level)">{{
+                      server.health.level
+                    }}</span>
                   </dd>
                   <dt class="text-base-content/60">Admin State</dt>
-                  <dd><span class="badge badge-ghost badge-sm">{{ server.health.admin_state }}</span></dd>
+                  <dd>
+                    <span class="badge badge-ghost badge-sm">{{
+                      server.health.admin_state
+                    }}</span>
+                  </dd>
                   <dt class="text-base-content/60">Summary</dt>
                   <dd>{{ server.health.summary }}</dd>
                   <template v-if="server.health.detail">
                     <dt class="text-base-content/60">Detail</dt>
-                    <dd class="text-base-content/70 break-words whitespace-pre-wrap">{{ server.health.detail }}</dd>
+                    <dd
+                      class="text-base-content/70 break-words whitespace-pre-wrap"
+                    >
+                      {{ server.health.detail }}
+                    </dd>
                   </template>
                   <template v-if="server.health.action">
                     <dt class="text-base-content/60">Suggested Action</dt>
-                    <dd><span class="badge badge-info badge-outline badge-sm">{{ server.health.action }}</span></dd>
+                    <dd>
+                      <span class="badge badge-info badge-outline badge-sm">{{
+                        server.health.action
+                      }}</span>
+                    </dd>
                   </template>
                 </dl>
               </div>
@@ -692,19 +1148,44 @@
         <div v-if="activeTab === 'security'">
           <div class="space-y-6">
             <!-- Header: Scan button + Risk Score -->
-            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <div class="tooltip tooltip-bottom" :data-tip="!dockerAvailable ? 'Docker is required to run security scanners' : (!hasEnabledScanners() ? 'No scanners enabled — install one from Security Scanners' : '')">
+            <div
+              class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4"
+            >
+              <div
+                class="tooltip tooltip-bottom"
+                :data-tip="
+                  !dockerAvailable
+                    ? 'Docker is required to run security scanners'
+                    : !hasEnabledScanners()
+                      ? 'No scanners enabled — install one from Security Scanners'
+                      : ''
+                "
+              >
                 <button
                   v-if="hasEnabledScanners()"
                   @click="startSecurityScan"
                   :disabled="scanLoading || !dockerAvailable"
                   class="btn btn-primary"
                 >
-                  <span v-if="scanLoading" class="loading loading-spinner loading-xs"></span>
-                  <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  <span
+                    v-if="scanLoading"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                  <svg
+                    v-else
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
                   </svg>
-                  {{ scanLoading ? 'Scanning...' : 'Scan Now' }}
+                  {{ scanLoading ? "Scanning..." : "Scan Now" }}
                 </button>
               </div>
               <button
@@ -712,17 +1193,37 @@
                 @click="cancelSecurityScan"
                 class="btn btn-error btn-outline btn-sm"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
                 Cancel
               </button>
 
-              <div v-if="(scanReport || server.security_scan) && scanReport?.scan_complete !== false && !scanLoading" class="flex items-center gap-3">
+              <div
+                v-if="
+                  (scanReport || server.security_scan) &&
+                  scanReport?.scan_complete !== false &&
+                  !scanLoading
+                "
+                class="flex items-center gap-3"
+              >
                 <div class="text-right">
                   <div class="text-sm text-base-content/70">Risk Score</div>
                   <div class="text-2xl font-bold" :class="riskScoreClass">
-                    {{ currentRiskScore }}<span class="text-sm font-normal text-base-content/50">/100</span>
+                    {{ currentRiskScore
+                    }}<span class="text-sm font-normal text-base-content/50"
+                      >/100</span
+                    >
                   </div>
                 </div>
                 <div
@@ -734,12 +1235,31 @@
                   {{ currentRiskScore }}
                 </div>
               </div>
-              <div v-else-if="scanReport?.scan_complete === false && !scanLoading" class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                v-else-if="scanReport?.scan_complete === false && !scanLoading"
+                class="flex items-center gap-2"
+              >
+                <svg
+                  class="w-5 h-5 text-error"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
-                <span v-if="scanReport?.empty_scan" class="text-sm text-warning font-medium">No Files Scanned</span>
-                <span v-else class="text-sm text-error font-medium">Scan Failed</span>
+                <span
+                  v-if="scanReport?.empty_scan"
+                  class="text-sm text-warning font-medium"
+                  >No Files Scanned</span
+                >
+                <span v-else class="text-sm text-error font-medium"
+                  >Scan Failed</span
+                >
               </div>
             </div>
 
@@ -747,32 +1267,60 @@
             <div v-if="scanLoading" class="space-y-3">
               <template v-if="scanProgress && scanProgress.total > 0">
                 <div class="flex items-center justify-between text-sm">
-                  <span class="font-medium">Scanning with {{ scanProgress.total }} scanner{{ scanProgress.total !== 1 ? 's' : '' }}...</span>
-                  <span class="text-base-content/60">{{ scanProgress.completed }}/{{ scanProgress.total }} complete</span>
+                  <span class="font-medium"
+                    >Scanning with {{ scanProgress.total }} scanner{{
+                      scanProgress.total !== 1 ? "s" : ""
+                    }}...</span
+                  >
+                  <span class="text-base-content/60"
+                    >{{ scanProgress.completed }}/{{
+                      scanProgress.total
+                    }}
+                    complete</span
+                  >
                 </div>
                 <progress
                   class="progress progress-primary w-full"
                   :value="scanProgress.completed"
                   :max="scanProgress.total"
                 ></progress>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <div
+                  class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
+                >
                   <div
                     v-for="ss in scanProgress.scanners"
                     :key="ss.scanner_id"
                     class="flex items-center gap-2 px-3 py-2 rounded-lg bg-base-200"
                   >
-                    <span v-if="ss.status === 'running'" class="loading loading-spinner loading-xs text-primary"></span>
-                    <span v-else-if="ss.status === 'completed'" class="text-success">&#10003;</span>
-                    <span v-else-if="ss.status === 'failed'" class="text-error">&#10007;</span>
+                    <span
+                      v-if="ss.status === 'running'"
+                      class="loading loading-spinner loading-xs text-primary"
+                    ></span>
+                    <span
+                      v-else-if="ss.status === 'completed'"
+                      class="text-success"
+                      >&#10003;</span
+                    >
+                    <span v-else-if="ss.status === 'failed'" class="text-error"
+                      >&#10007;</span
+                    >
                     <span v-else class="text-base-content/30">&#9679;</span>
-                    <span class="text-sm truncate flex-1">{{ scannerDisplayName(ss.scanner_id) }}</span>
-                    <span v-if="ss.findings_count > 0" class="badge badge-xs badge-error">{{ ss.findings_count }}</span>
+                    <span class="text-sm truncate flex-1">{{
+                      scannerDisplayName(ss.scanner_id)
+                    }}</span>
+                    <span
+                      v-if="ss.findings_count > 0"
+                      class="badge badge-xs badge-error"
+                      >{{ ss.findings_count }}</span
+                    >
                   </div>
                 </div>
               </template>
               <template v-else>
                 <div class="flex items-center gap-3 text-sm">
-                  <span class="loading loading-spinner loading-sm text-primary"></span>
+                  <span
+                    class="loading loading-spinner loading-sm text-primary"
+                  ></span>
                   <span class="font-medium">Initializing security scan...</span>
                 </div>
                 <progress class="progress progress-primary w-full"></progress>
@@ -782,98 +1330,249 @@
             <!-- Scan Context Banner -->
             <div v-if="scanContext" class="mt-2">
               <!-- No Docker Isolation (local process) -->
-              <div v-if="!scanContext.docker_isolation && !isUrlSourceMethod && scanContext.source_method !== 'none' && scanContext.source_method !== 'tool_definitions_only'" class="flex items-start gap-3 p-4 rounded-lg bg-base-200/60 border border-base-300">
-                <svg class="w-5 h-5 shrink-0 mt-0.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <div
+                v-if="
+                  !scanContext.docker_isolation &&
+                  !isUrlSourceMethod &&
+                  scanContext.source_method !== 'none' &&
+                  scanContext.source_method !== 'tool_definitions_only'
+                "
+                class="flex items-start gap-3 p-4 rounded-lg bg-base-200/60 border border-base-300"
+              >
+                <svg
+                  class="w-5 h-5 shrink-0 mt-0.5 text-base-content/60"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
                 </svg>
                 <div class="min-w-0 flex-1">
                   <h3 class="font-semibold text-sm">Local Process</h3>
-                  <p class="text-sm text-base-content/70">Running directly on the host, without Docker isolation.</p>
                   <p class="text-sm text-base-content/70">
-                    Source: <code class="bg-base-300 px-1 rounded text-xs">{{ scanContext.source_path }}</code>
-                    <span v-if="scanContext.total_files"> ({{ scanContext.total_files }} files, {{ formatFileSize(scanContext.total_size_bytes) }})</span>
+                    Running directly on the host, without Docker isolation.
+                  </p>
+                  <p class="text-sm text-base-content/70">
+                    Source:
+                    <code class="bg-base-300 px-1 rounded text-xs">{{
+                      scanContext.source_path
+                    }}</code>
+                    <span v-if="scanContext.total_files">
+                      ({{ scanContext.total_files }} files,
+                      {{ formatFileSize(scanContext.total_size_bytes) }})</span
+                    >
                   </p>
                   <p class="text-sm text-base-content/60">
                     Protocol: {{ scanContext.server_protocol }}
-                    <span v-if="scanContext.server_command"> &bull; Command: {{ scanContext.server_command }}</span>
+                    <span v-if="scanContext.server_command">
+                      &bull; Command: {{ scanContext.server_command }}</span
+                    >
                   </p>
                 </div>
               </div>
 
               <!-- Docker Isolated -->
-              <div v-else-if="scanContext.docker_isolation" class="flex items-start gap-3 p-4 rounded-lg bg-base-200/60 border border-base-300">
-                <svg class="w-5 h-5 shrink-0 mt-0.5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+              <div
+                v-else-if="scanContext.docker_isolation"
+                class="flex items-start gap-3 p-4 rounded-lg bg-base-200/60 border border-base-300"
+              >
+                <svg
+                  class="w-5 h-5 shrink-0 mt-0.5 text-base-content/60"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"
+                  />
                 </svg>
                 <div class="min-w-0 flex-1">
                   <h3 class="font-semibold text-sm">Docker Isolated</h3>
                   <p class="text-sm text-base-content/70">
-                    Source extracted from container<span v-if="scanContext.container_id">: <code class="bg-base-300 px-1 rounded text-xs">{{ scanContext.container_id.substring(0, 12) }}...</code></span>
+                    Source extracted from container<span
+                      v-if="scanContext.container_id"
+                      >:
+                      <code class="bg-base-300 px-1 rounded text-xs"
+                        >{{
+                          scanContext.container_id.substring(0, 12)
+                        }}...</code
+                      ></span
+                    >
                   </p>
                   <p class="text-sm text-base-content/70">
-                    Source: <code class="bg-base-300 px-1 rounded text-xs">{{ scanContext.source_path }}</code>
-                    <span v-if="scanContext.total_files"> ({{ scanContext.total_files }} files, {{ formatFileSize(scanContext.total_size_bytes) }})</span>
+                    Source:
+                    <code class="bg-base-300 px-1 rounded text-xs">{{
+                      scanContext.source_path
+                    }}</code>
+                    <span v-if="scanContext.total_files">
+                      ({{ scanContext.total_files }} files,
+                      {{ formatFileSize(scanContext.total_size_bytes) }})</span
+                    >
                   </p>
                   <p class="text-sm text-base-content/60">
                     Protocol: {{ scanContext.server_protocol }}
-                    <span v-if="scanContext.server_command"> &bull; Command: {{ scanContext.server_command }}</span>
+                    <span v-if="scanContext.server_command">
+                      &bull; Command: {{ scanContext.server_command }}</span
+                    >
                   </p>
                 </div>
               </div>
 
               <!-- HTTP Server (url, url_full, or tool_definitions_only for http protocol) -->
-              <div v-else-if="isUrlSourceMethod || scanContext.source_method === 'tool_definitions_only'" class="flex items-start gap-3 p-4 rounded-lg bg-base-200/60 border border-base-300">
-                <svg class="w-5 h-5 shrink-0 mt-0.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              <div
+                v-else-if="
+                  isUrlSourceMethod ||
+                  scanContext.source_method === 'tool_definitions_only'
+                "
+                class="flex items-start gap-3 p-4 rounded-lg bg-base-200/60 border border-base-300"
+              >
+                <svg
+                  class="w-5 h-5 shrink-0 mt-0.5 text-base-content/60"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                  />
                 </svg>
                 <div class="min-w-0 flex-1">
-                  <h3 class="font-semibold text-sm">{{ isUrlSourceMethod ? 'HTTP Server' : 'Tool Definitions Only' }}</h3>
-                  <p class="text-sm text-base-content/70">{{ isUrlSourceMethod ? 'Tool description scanning only (no filesystem to scan)' : 'Scanning tool descriptions for poisoning and injection attacks' }}</p>
-                  <p v-if="isUrlSourceMethod && scanContext.source_path" class="text-sm text-base-content/70">
-                    URL: <code class="bg-base-300 px-1 rounded text-xs">{{ scanContext.source_path }}</code>
+                  <h3 class="font-semibold text-sm">
+                    {{
+                      isUrlSourceMethod
+                        ? "HTTP Server"
+                        : "Tool Definitions Only"
+                    }}
+                  </h3>
+                  <p class="text-sm text-base-content/70">
+                    {{
+                      isUrlSourceMethod
+                        ? "Tool description scanning only (no filesystem to scan)"
+                        : "Scanning tool descriptions for poisoning and injection attacks"
+                    }}
                   </p>
-                  <p v-if="scanContext.tools_exported" class="text-sm text-base-content/60">
-                    {{ scanContext.tools_exported }} tool definitions exported for analysis
+                  <p
+                    v-if="isUrlSourceMethod && scanContext.source_path"
+                    class="text-sm text-base-content/70"
+                  >
+                    URL:
+                    <code class="bg-base-300 px-1 rounded text-xs">{{
+                      scanContext.source_path
+                    }}</code>
+                  </p>
+                  <p
+                    v-if="scanContext.tools_exported"
+                    class="text-sm text-base-content/60"
+                  >
+                    {{ scanContext.tools_exported }} tool definitions exported
+                    for analysis
                   </p>
                 </div>
               </div>
 
               <!-- No Source Available -->
-              <div v-else-if="scanContext.source_method === 'none'" class="alert alert-error">
-                <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                v-else-if="scanContext.source_method === 'none'"
+                class="alert alert-error"
+              >
+                <svg
+                  class="w-6 h-6 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <div>
                   <h3 class="font-bold">No Source Available</h3>
-                  <p class="text-sm">Could not resolve source files for scanning.</p>
-                  <p class="text-sm text-base-content/70">Server may be disconnected or not running in Docker.</p>
+                  <p class="text-sm">
+                    Could not resolve source files for scanning.
+                  </p>
+                  <p class="text-sm text-base-content/70">
+                    Server may be disconnected or not running in Docker.
+                  </p>
                 </div>
               </div>
             </div>
 
             <!-- Scan error -->
             <div v-if="scanError" class="alert alert-error">
-              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-5 h-5 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span>{{ scanError }}</span>
-              <button @click="scanError = null; startSecurityScan()" class="btn btn-sm btn-ghost">Retry</button>
+              <button
+                @click="
+                  scanError = null;
+                  startSecurityScan();
+                "
+                class="btn btn-sm btn-ghost"
+              >
+                Retry
+              </button>
             </div>
 
             <!-- Loading state for report -->
-            <div v-if="scanReportLoading && !scanLoading" class="text-center py-8">
+            <div
+              v-if="scanReportLoading && !scanLoading"
+              class="text-center py-8"
+            >
               <span class="loading loading-spinner loading-lg"></span>
               <p class="mt-2">Loading scan report...</p>
             </div>
 
             <!-- Not scanned yet -->
-            <div v-else-if="!scanReport && !scanLoading && securityScanStatus === 'not_scanned'" class="text-center py-12">
-              <svg class="w-16 h-16 mx-auto mb-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <div
+              v-else-if="
+                !scanReport &&
+                !scanLoading &&
+                securityScanStatus === 'not_scanned'
+              "
+              class="text-center py-12"
+            >
+              <svg
+                class="w-16 h-16 mx-auto mb-4 opacity-40"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
               </svg>
               <h3 class="text-xl font-semibold mb-2">No Security Scan</h3>
               <p class="text-base-content/70 mb-4">
-                This server has not been scanned yet. Click "Scan Now" to check for security issues.
+                This server has not been scanned yet. Click "Scan Now" to check
+                for security issues.
               </p>
             </div>
 
@@ -882,30 +1581,76 @@
               <!-- Risk Score + Summary -->
               <div class="flex items-center gap-6 mb-4">
                 <div class="text-center">
-                  <div class="text-3xl font-bold" :class="scanReport.risk_score >= 70 ? 'text-error' : scanReport.risk_score >= 40 ? 'text-warning' : 'text-success'">
-                    {{ scanReport.empty_scan ? 'N/A' : scanReport.risk_score + '/100' }}
+                  <div
+                    class="text-3xl font-bold"
+                    :class="
+                      scanReport.risk_score >= 70
+                        ? 'text-error'
+                        : scanReport.risk_score >= 40
+                          ? 'text-warning'
+                          : 'text-success'
+                    "
+                  >
+                    {{
+                      scanReport.empty_scan
+                        ? "N/A"
+                        : scanReport.risk_score + "/100"
+                    }}
                   </div>
                   <div class="text-xs text-base-content/50">Risk Score</div>
                 </div>
                 <div class="flex gap-4 text-sm">
-                  <span v-if="scanReport.summary?.dangerous" class="text-error font-semibold">{{ scanReport.summary.dangerous }} dangerous</span>
-                  <span v-if="scanReport.summary?.warnings" class="text-warning font-semibold">{{ scanReport.summary.warnings }} warnings</span>
-                  <span v-if="scanReport.summary?.info_level" class="text-info">{{ scanReport.summary.info_level }} info</span>
-                  <span v-if="scanReport.summary?.total === 0" class="text-success font-semibold">No findings</span>
+                  <span
+                    v-if="scanReport.summary?.dangerous"
+                    class="text-error font-semibold"
+                    >{{ scanReport.summary.dangerous }} dangerous</span
+                  >
+                  <span
+                    v-if="scanReport.summary?.warnings"
+                    class="text-warning font-semibold"
+                    >{{ scanReport.summary.warnings }} warnings</span
+                  >
+                  <span v-if="scanReport.summary?.info_level" class="text-info"
+                    >{{ scanReport.summary.info_level }} info</span
+                  >
+                  <span
+                    v-if="scanReport.summary?.total === 0"
+                    class="text-success font-semibold"
+                    >No findings</span
+                  >
                 </div>
               </div>
 
               <!-- Scan metadata -->
               <div class="text-sm text-base-content/60 mb-4">
-                <span v-if="scanReport.job_id">Scan ID: <code class="bg-base-200 px-1 rounded text-xs">{{ scanReport.job_id.substring(0, 8) }}</code></span>
-                <span v-if="scanReport.scanned_at" class="ml-4">{{ new Date(scanReport.scanned_at).toLocaleString() }}</span>
-                <span v-if="scanReport.pass2_running" class="ml-4 badge badge-sm badge-info">Pass 2 running...</span>
-                <span v-else-if="scanReport.pass2_complete" class="ml-4 badge badge-sm badge-success">Pass 2 complete</span>
+                <span v-if="scanReport.job_id"
+                  >Scan ID:
+                  <code class="bg-base-200 px-1 rounded text-xs">{{
+                    scanReport.job_id.substring(0, 8)
+                  }}</code></span
+                >
+                <span v-if="scanReport.scanned_at" class="ml-4">{{
+                  new Date(scanReport.scanned_at).toLocaleString()
+                }}</span>
+                <span
+                  v-if="scanReport.pass2_running"
+                  class="ml-4 badge badge-sm badge-info"
+                  >Pass 2 running...</span
+                >
+                <span
+                  v-else-if="scanReport.pass2_complete"
+                  class="ml-4 badge badge-sm badge-success"
+                  >Pass 2 complete</span
+                >
               </div>
 
               <!-- Action buttons -->
               <div class="flex gap-3">
-                <router-link v-if="scanReport.job_id" :to="`/security/scans/${scanReport.job_id}`" class="btn btn-primary btn-sm">
+                <router-link
+                  v-if="scanReport.job_id"
+                  :to="`/security/scans/${scanReport.job_id}`"
+                  class="btn btn-primary btn-sm"
+                >
                   View Full Report &rarr;
                 </router-link>
               </div>
@@ -918,7 +1663,9 @@
     <!-- Tool Schema Modal -->
     <div v-if="selectedToolSchema" class="modal modal-open">
       <div class="modal-box max-w-4xl">
-        <h3 class="font-bold text-lg mb-4">{{ selectedToolSchema.name }} - Input Schema</h3>
+        <h3 class="font-bold text-lg mb-4">
+          {{ selectedToolSchema.name }} - Input Schema
+        </h3>
         <div class="mockup-code">
           <pre><code>{{ JSON.stringify(selectedToolSchema.input_schema, null, 2) }}</code></pre>
         </div>
@@ -942,7 +1689,7 @@ import CollapsibleHintsPanel from '@/components/CollapsibleHintsPanel.vue'
 import AnnotationBadges from '@/components/AnnotationBadges.vue'
 import ErrorPanel from '@/components/diagnostics/ErrorPanel.vue'
 import type { Hint } from '@/components/CollapsibleHintsPanel.vue'
-import type { Server, Tool, ToolApproval, SecurityScanReport } from '@/types'
+import type { Server, Tool, ToolApproval, SecurityScanReport, ToolPreference } from '@/types'
 import api from '@/services/api'
 import { useSecurityScannerStatus } from '@/composables/useSecurityScannerStatus'
 
@@ -973,6 +1720,10 @@ const selectedToolSchema = ref<Tool | null>(null)
 // Tool quarantine (Spec 032)
 const toolApprovals = ref<ToolApproval[]>([])
 const approvalLoading = ref(false)
+
+// Tool preferences
+const toolPreferences = ref<Record<string, ToolPreference>>({})
+const toolPreferenceLoading = ref<string | null>(null)
 
 const quarantinedTools = computed(() => {
   return toolApprovals.value.filter(t => t.status === 'pending' || t.status === 'changed')
@@ -1203,6 +1954,66 @@ function computeWordDiff(oldText: string, newText: string): DiffPart[] {
     refined.push(current)
   }
   return mergeSameKind(refined)
+// Tool preference helpers
+function isToolEnabled(toolName: string): boolean {
+  // First check if tool has enabled field from API response
+  const tool = serverTools.value.find(t => t.name === toolName)
+  if (tool && 'enabled' in tool && typeof tool.enabled === 'boolean') {
+    return tool.enabled
+  }
+  // Fall back to stored preferences
+  return toolPreferences.value[toolName]?.enabled ?? true
+}
+
+async function loadToolPreferences() {
+  if (!server.value) return
+  try {
+    const response = await api.getToolPreferences(server.value.name)
+    if (response.success && response.data) {
+      toolPreferences.value = response.data.preferences || {}
+    }
+  } catch {
+    // Silently fail - tool preferences are supplementary
+  }
+}
+
+async function toggleToolEnabled(toolName: string) {
+  if (!server.value) return
+  const currentEnabled = isToolEnabled(toolName)
+  const newEnabled = !currentEnabled
+
+  toolPreferenceLoading.value = toolName
+  try {
+    const response = await api.updateToolPreference(server.value.name, toolName, newEnabled)
+    if (response.success) {
+      toolPreferences.value[toolName] = {
+        tool_name: toolName,
+        server_name: server.value.name,
+        enabled: newEnabled,
+        created_at: response.data?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      systemStore.addToast({
+        type: 'success',
+        title: 'Tool Updated',
+        message: `${toolName} has been ${newEnabled ? 'enabled' : 'disabled'}`,
+      })
+    } else {
+      systemStore.addToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: response.error || 'Failed to update tool preference',
+      })
+    }
+  } catch (err) {
+    systemStore.addToast({
+      type: 'error',
+      title: 'Update Failed',
+      message: err instanceof Error ? err.message : 'Failed to update tool preference',
+    })
+  } finally {
+    toolPreferenceLoading.value = null
+  }
 }
 
 // Methods
@@ -1219,10 +2030,11 @@ async function loadServerDetails() {
       return
     }
 
-    // Load tools, approvals, and logs in parallel
+    // Load tools, approvals, preferences, and logs in parallel
     await Promise.all([
       loadTools(),
       loadToolApprovals(),
+      loadToolPreferences(),
       loadLogs()
     ])
   } catch (err) {
@@ -1239,7 +2051,8 @@ async function loadTools() {
   toolsError.value = null
 
   try {
-    const response = await api.getServerTools(server.value.name)
+    // Use getAllServerTools to include disabled tools so users can see and re-enable them
+    const response = await api.getAllServerTools(server.value.name)
     if (response.success && response.data) {
       serverTools.value = response.data.tools || []
     } else {

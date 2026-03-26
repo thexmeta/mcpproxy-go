@@ -487,6 +487,12 @@ components:
           type: string
         created:
           type: string
+        disabled_tools:
+          description: Tools disabled for this server
+          items:
+            type: string
+          type: array
+          uniqueItems: false
         enabled:
           type: boolean
         env:
@@ -772,6 +778,13 @@ components:
       - ActivityTypePolicyDecision
       - ActivityTypeQuarantineChange
       - ActivityTypeServerChange
+    contracts.BulkToolPreferenceUpdateResponse:
+      properties:
+        server:
+          type: string
+        updated:
+          type: integer
+      type: object
     contracts.ConfigApplyResult:
       properties:
         applied_immediately:
@@ -1029,6 +1042,17 @@ components:
           uniqueItems: false
         total:
           type: integer
+      type: object
+    contracts.GetToolPreferencesResponse:
+      properties:
+        count:
+          type: integer
+        preferences:
+          additionalProperties:
+            $ref: '#/components/schemas/contracts.ToolPreference'
+          type: object
+        server_name:
+          type: string
       type: object
     contracts.HealthStatus:
       description: Unified health status calculated by the backend
@@ -1730,6 +1754,30 @@ components:
         tool_name:
           description: Tool name (without server prefix)
           type: string
+      type: object
+    contracts.ToolPreference:
+      properties:
+        call_count:
+          type: integer
+        custom_description:
+          type: string
+        custom_name:
+          type: string
+        enabled:
+          type: boolean
+        last_used:
+          type: string
+        original_name:
+          type: string
+      type: object
+    contracts.ToolPreferenceUpdate:
+      properties:
+        custom_description:
+          type: string
+        custom_name:
+          type: string
+        enabled:
+          type: boolean
       type: object
     contracts.UpdateInfo:
       description: Update information (if available)
@@ -3777,6 +3825,208 @@ paths:
       - ApiKeyAuth: []
       - ApiKeyQuery: []
       summary: Get tools for a server
+      tags:
+      - servers
+  /api/v1/servers/{id}/tools/all:
+    get:
+      description: Retrieve all available tools for a specific server, including disabled
+        ones.
+      parameters:
+      - description: Server ID or name
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.GetServerToolsResponse'
+          description: All server tools retrieved successfully
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Bad request (missing server ID)
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Server not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Get all server tools including disabled
+      tags:
+      - servers
+  /api/v1/servers/{id}/tools/preferences:
+    get:
+      description: Retrieve all tool preferences (enable/disable, custom names) for
+        a specific server
+      parameters:
+      - description: Server ID or name
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.GetToolPreferencesResponse'
+          description: Tool preferences retrieved successfully
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Bad request (missing server ID)
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Get tool preferences for a server
+      tags:
+      - servers
+  /api/v1/servers/{id}/tools/preferences/{tool}:
+    delete:
+      description: Delete a tool preference (resets to default behavior)
+      parameters:
+      - description: Server ID or name
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - description: Tool name
+        in: path
+        name: tool
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.APIResponse'
+          description: Preference deleted successfully
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Bad request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Delete tool preference
+      tags:
+      - servers
+    put:
+      description: Update or create a tool preference (enable/disable, custom name/description)
+      parameters:
+      - description: Server ID or name
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - description: Tool name
+        in: path
+        name: tool
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/contracts.ToolPreferenceUpdate'
+        description: Preference update
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ToolPreference'
+          description: Updated preference
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Bad request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Update tool preference
+      tags:
+      - servers
+  /api/v1/servers/{id}/tools/preferences/bulk:
+    post:
+      description: Update multiple tool preferences for a server at once
+      parameters:
+      - description: Server ID or name
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+        description: Map of tool names to preferences
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.BulkToolPreferenceUpdateResponse'
+          description: Updated preferences count
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Bad request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Bulk update tool preferences
       tags:
       - servers
   /api/v1/servers/{id}/unquarantine:

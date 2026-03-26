@@ -192,6 +192,16 @@ type Tool struct {
 	ApprovalStatus string                 `json:"approval_status,omitempty"`
 }
 
+// ToolPreference represents a tool's preference configuration for API responses
+type ToolPreference struct {
+	Enabled           bool       `json:"enabled"`
+	CustomName        string     `json:"custom_name,omitempty"`
+	CustomDescription string     `json:"custom_description,omitempty"`
+	OriginalName      string     `json:"original_name"`
+	LastUsed          *time.Time `json:"last_used,omitempty"`
+	CallCount         uint64     `json:"call_count,omitempty"`
+}
+
 // SearchResult represents a search result for tools
 type SearchResult struct {
 	Tool    Tool    `json:"tool"`
@@ -288,6 +298,26 @@ type GetServerToolsResponse struct {
 	ServerName string `json:"server_name"`
 	Tools      []Tool `json:"tools"`
 	Count      int    `json:"count"`
+}
+
+// GetToolPreferencesResponse is the response for GET /api/v1/servers/{id}/tools/preferences
+type GetToolPreferencesResponse struct {
+	ServerName  string                       `json:"server_name"`
+	Preferences map[string]*ToolPreference   `json:"preferences"`
+	Count       int                          `json:"count"`
+}
+
+// ToolPreferenceUpdate is the request body for updating a tool preference
+type ToolPreferenceUpdate struct {
+	Enabled           bool   `json:"enabled"`
+	CustomName        string `json:"custom_name,omitempty"`
+	CustomDescription string `json:"custom_description,omitempty"`
+}
+
+// BulkToolPreferenceUpdateResponse is the response for bulk preference updates
+type BulkToolPreferenceUpdateResponse struct {
+	Server  string `json:"server"`
+	Updated int    `json:"updated"`
 }
 
 // SearchToolsResponse is the response for GET /api/v1/index/search

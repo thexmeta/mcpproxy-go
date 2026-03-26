@@ -86,6 +86,7 @@ func (b *BoltDB) initBuckets() error {
 			ToolStatsBucket,
 			ToolHashBucket,
 			ToolApprovalBucket,
+			ToolPreferenceBucket,
 			OAuthTokenBucket,
 			MetaBucket,
 			ActivityRecordsBucket,
@@ -388,6 +389,106 @@ func (b *BoltDB) DeleteServerToolApprovals(serverName string) error {
 	prefix := serverName + ":"
 	return b.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket([]byte(ToolApprovalBucket))
+		var keysToDelete [][]byte
+		err := bucket.ForEach(func(k, _ []byte) error {
+			if bytes.HasPrefix(k, []byte(prefix)) {
+				keysToDelete = append(keysToDelete, k)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		for _, key := range keysToDelete {
+			if err := bucket.Delete(key); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// Tool preference operations
+
+// SaveToolPreference saves a tool preference record
+func (b *BoltDB) SaveToolPreference(record *ToolPreferenceRecord) error {
+	record.Updated = time.Now()
+	if record.Created.IsZero() {
+		record.Created = time.Now()
+	}
+
+	return b.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(ToolPreferenceBucket))
+		data, err := record.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte(record.Key()), data)
+	})
+}
+
+// GetToolPreference retrieves a tool preference record by server and tool name
+func (b *BoltDB) GetToolPreference(serverName, toolName string) (*ToolPreferenceRecord, error) {
+	var record *ToolPreferenceRecord
+
+	err := b.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(ToolPreferenceBucket))
+		key := ToolPreferenceKey(serverName, toolName)
+		data := bucket.Get([]byte(key))
+		if data == nil {
+			return fmt.Errorf("tool preference not found")
+		}
+
+		record = &ToolPreferenceRecord{}
+		return record.UnmarshalBinary(data)
+	})
+
+	return record, err
+}
+
+// ListToolPreferences returns all tool preference records for a server.
+// If serverName is empty, returns all records across all servers.
+func (b *BoltDB) ListToolPreferences(serverName string) ([]*ToolPreferenceRecord, error) {
+	var records []*ToolPreferenceRecord
+
+	prefix := ""
+	if serverName != "" {
+		prefix = serverName + ":"
+	}
+
+	err := b.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(ToolPreferenceBucket))
+		return bucket.ForEach(func(k, v []byte) error {
+			if prefix != "" && !bytes.HasPrefix(k, []byte(prefix)) {
+				return nil
+			}
+
+			record := &ToolPreferenceRecord{}
+			if err := record.UnmarshalBinary(v); err != nil {
+				return err
+			}
+			records = append(records, record)
+			return nil
+		})
+	})
+
+	return records, err
+}
+
+// DeleteToolPreference deletes a tool preference record
+func (b *BoltDB) DeleteToolPreference(serverName, toolName string) error {
+	return b.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(ToolPreferenceBucket))
+		key := ToolPreferenceKey(serverName, toolName)
+		return bucket.Delete([]byte(key))
+	})
+}
+
+// DeleteServerToolPreferences deletes all tool preference records for a server
+func (b *BoltDB) DeleteServerToolPreferences(serverName string) error {
+	prefix := serverName + ":"
+	return b.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(ToolPreferenceBucket))
 		var keysToDelete [][]byte
 		err := bucket.ForEach(func(k, _ []byte) error {
 			if bytes.HasPrefix(k, []byte(prefix)) {

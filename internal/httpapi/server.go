@@ -523,10 +523,17 @@ func (s *Server) setupRoutes() {
 			r.Post("/unquarantine", s.handleUnquarantineServer)
 			r.Post("/discover-tools", s.handleDiscoverServerTools)
 			r.Get("/tools", s.handleGetServerTools)
+			r.Get("/tools/all", s.handleGetAllServerTools)
 			r.Get("/logs", s.handleGetServerLogs)
 			// Spec 044: per-server diagnostics with stable error_code.
 			r.Get("/diagnostics", s.handleGetServerDiagnostics)
 			r.Get("/tool-calls", s.handleGetServerToolCalls)
+
+			// Tool preferences (enable/disable, custom names)
+			r.Get("/tools/preferences", s.handleGetToolPreferences)
+			r.Put("/tools/preferences/{tool}", s.handleUpdateToolPreference)
+			r.Delete("/tools/preferences/{tool}", s.handleDeleteToolPreference)
+			r.Post("/tools/preferences/bulk", s.handleBulkUpdateToolPreferences)
 
 			// Tool-level quarantine (Spec 032)
 			r.Post("/tools/approve", s.handleApproveTools)
@@ -2200,6 +2207,61 @@ func (s *Server) handleGetServerTools(w http.ResponseWriter, r *http.Request) {
 	sort.SliceStable(typedTools, func(i, j int) bool {
 		return toolApprovalPriority(typedTools[i].ApprovalStatus) < toolApprovalPriority(typedTools[j].ApprovalStatus)
 	})
+
+	response := contracts.GetServerToolsResponse{
+		ServerName: serverID,
+		Tools:      typedTools,
+		Count:      len(typedTools),
+	}
+
+	s.writeSuccess(w, response)
+}
+
+// handleGetAllServerTools godoc
+// @Summary Get all server tools including disabled
+// @Description Retrieve all available tools for a specific server, including disabled ones.
+// Disabled tools are returned with enabled=false so clients can see and re-enable them.
+// @Tags servers
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Param id path string true "Server ID or name"
+// @Success 200 {object} contracts.GetServerToolsResponse "All server tools retrieved successfully"
+// @Failure 400 {object} contracts.ErrorResponse "Bad request (missing server ID)"
+// @Failure 404 {object} contracts.ErrorResponse "Server not found"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/servers/{id}/tools/all [get]
+func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if serverID == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
+		return
+	}
+
+	// Call management service
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
+	})
+	if !ok {
+		s.logger.Error("Management service not available or missing GetAllServerTools method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	tools, err := mgmtSvc.GetAllServerTools(r.Context(), serverID)
+	if err != nil {
+		s.logger.Error("Failed to get all server tools", "server", serverID, "error", err)
+
+		if strings.Contains(err.Error(), "not found") {
+			s.writeError(w, r, http.StatusNotFound, fmt.Sprintf("Server not found: %s", serverID))
+			return
+		}
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to get tools: %v", err))
+		return
+	}
+
+	// Convert to typed tools
+	typedTools := contracts.ConvertGenericToolsToTyped(tools)
 
 	response := contracts.GetServerToolsResponse{
 		ServerName: serverID,
@@ -3972,4 +4034,194 @@ func toolApprovalPriority(status string) int {
 	default:
 		return 2
 	}
+// handleGetToolPreferences godoc
+// @Summary Get tool preferences for a server
+// @Description Retrieve all tool preferences (enable/disable, custom names) for a specific server
+// @Tags servers
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Param id path string true "Server ID or name"
+// @Success 200 {object} contracts.GetToolPreferencesResponse "Tool preferences retrieved successfully"
+// @Failure 400 {object} contracts.ErrorResponse "Bad request (missing server ID)"
+// @Router /api/v1/servers/{id}/tools/preferences [get]
+func (s *Server) handleGetToolPreferences(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if serverID == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error)
+	})
+	if !ok {
+		s.logger.Error("Management service not available or missing GetToolPreferences method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	prefs, err := mgmtSvc.GetToolPreferences(r.Context(), serverID)
+	if err != nil {
+		s.logger.Error("Failed to get tool preferences", "server", serverID, "error", err)
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to get preferences: %v", err))
+		return
+	}
+
+	response := contracts.GetToolPreferencesResponse{
+		ServerName:  serverID,
+		Preferences: prefs,
+		Count:       len(prefs),
+	}
+
+	s.writeSuccess(w, response)
+}
+
+// handleUpdateToolPreference godoc
+// @Summary Update tool preference
+// @Description Update or create a tool preference (enable/disable, custom name/description)
+// @Tags servers
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Param id path string true "Server ID or name"
+// @Param tool path string true "Tool name"
+// @Param preference body contracts.ToolPreferenceUpdate true "Preference update"
+// @Success 200 {object} contracts.ToolPreference "Updated preference"
+// @Failure 400 {object} contracts.ErrorResponse "Bad request"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/servers/{id}/tools/preferences/{tool} [put]
+func (s *Server) handleUpdateToolPreference(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	toolName := chi.URLParam(r, "tool")
+
+	if serverID == "" || toolName == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID and tool name required")
+		return
+	}
+
+	var update contracts.ToolPreferenceUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		s.writeError(w, r, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		UpdateToolPreference(ctx context.Context, serverName, toolName string, pref *contracts.ToolPreference) error
+	})
+	if !ok {
+		s.logger.Error("Management service not available or missing UpdateToolPreference method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	pref := &contracts.ToolPreference{
+		Enabled:           update.Enabled,
+		CustomName:        update.CustomName,
+		CustomDescription: update.CustomDescription,
+	}
+
+	if err := mgmtSvc.UpdateToolPreference(r.Context(), serverID, toolName, pref); err != nil {
+		s.logger.Error("Failed to update tool preference", "server", serverID, "tool", toolName, "error", err)
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update preference: %v", err))
+		return
+	}
+
+	s.writeSuccess(w, pref)
+}
+
+// handleDeleteToolPreference godoc
+// @Summary Delete tool preference
+// @Description Delete a tool preference (resets to default behavior)
+// @Tags servers
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Param id path string true "Server ID or name"
+// @Param tool path string true "Tool name"
+// @Success 200 {object} contracts.APIResponse "Preference deleted successfully"
+// @Failure 400 {object} contracts.ErrorResponse "Bad request"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/servers/{id}/tools/preferences/{tool} [delete]
+func (s *Server) handleDeleteToolPreference(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	toolName := chi.URLParam(r, "tool")
+
+	if serverID == "" || toolName == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID and tool name required")
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		DeleteToolPreference(ctx context.Context, serverName, toolName string) error
+	})
+	if !ok {
+		s.logger.Error("Management service not available or missing DeleteToolPreference method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	if err := mgmtSvc.DeleteToolPreference(r.Context(), serverID, toolName); err != nil {
+		s.logger.Error("Failed to delete tool preference", "server", serverID, "tool", toolName, "error", err)
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to delete preference: %v", err))
+		return
+	}
+
+	s.writeSuccess(w, map[string]interface{}{
+		"message": "Tool preference deleted",
+		"server":  serverID,
+		"tool":    toolName,
+	})
+}
+
+// handleBulkUpdateToolPreferences godoc
+// @Summary Bulk update tool preferences
+// @Description Update multiple tool preferences for a server at once
+// @Tags servers
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Param id path string true "Server ID or name"
+// @Param preferences body object true "Map of tool names to preferences"
+// @Success 200 {object} contracts.BulkToolPreferenceUpdateResponse "Updated preferences count"
+// @Failure 400 {object} contracts.ErrorResponse "Bad request"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/servers/{id}/tools/preferences/bulk [post]
+func (s *Server) handleBulkUpdateToolPreferences(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if serverID == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
+		return
+	}
+
+	var body struct {
+		Preferences map[string]*contracts.ToolPreference `json:"preferences"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.writeError(w, r, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		BulkUpdateToolPreferences(ctx context.Context, serverName string, preferences map[string]*contracts.ToolPreference) (int, error)
+	})
+	if !ok {
+		s.logger.Error("Management service not available or missing BulkUpdateToolPreferences method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	updated, err := mgmtSvc.BulkUpdateToolPreferences(r.Context(), serverID, body.Preferences)
+	if err != nil {
+		s.logger.Error("Failed to bulk update tool preferences", "server", serverID, "error", err)
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update preferences: %v", err))
+		return
+	}
+
+	s.writeSuccess(w, map[string]interface{}{
+		"server":  serverID,
+		"updated": updated,
+	})
 }

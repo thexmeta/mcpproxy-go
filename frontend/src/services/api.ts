@@ -1,4 +1,4 @@
-import type { APIResponse, Server, Tool, ToolApproval, SearchResult, StatusUpdate, SecretRef, MigrationAnalysis, ConfigSecretsResponse, GetToolCallsResponse, GetToolCallDetailResponse, GetServerToolCallsResponse, GetConfigResponse, ValidateConfigResponse, ConfigApplyResult, ServerTokenMetrics, GetRegistriesResponse, SearchRegistryServersResponse, RepositoryServer, GetSessionsResponse, GetSessionDetailResponse, InfoResponse, ActivityListResponse, ActivityDetailResponse, ActivitySummaryResponse, ImportResponse, AgentTokenInfo, CreateAgentTokenRequest, CreateAgentTokenResponse, RoutingInfo, ConnectStatusResponse, ConnectResult, DiagnosticFixResponse } from '@/types'
+import type { APIResponse, Server, Tool, ToolApproval, SearchResult, StatusUpdate, SecretRef, MigrationAnalysis, ConfigSecretsResponse, GetToolCallsResponse, GetToolCallDetailResponse, GetServerToolCallsResponse, GetConfigResponse, ValidateConfigResponse, ConfigApplyResult, ServerTokenMetrics, GetRegistriesResponse, SearchRegistryServersResponse, RepositoryServer, GetSessionsResponse, GetSessionDetailResponse, InfoResponse, ActivityListResponse, ActivityDetailResponse, ActivitySummaryResponse, ImportResponse, AgentTokenInfo, CreateAgentTokenRequest, CreateAgentTokenResponse, RoutingInfo, ConnectStatusResponse, ConnectResult, DiagnosticFixResponse, ToolPreference } from '@/types'
 
 // Event types for API service
 export interface APIAuthEvent {
@@ -282,6 +282,28 @@ class APIService {
 
   async getServerTools(serverName: string): Promise<APIResponse<{ tools: Tool[] }>> {
     return this.request<{ tools: Tool[] }>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools`)
+  }
+
+  async getAllServerTools(serverName: string): Promise<APIResponse<{ tools: Tool[] }>> {
+    return this.request<{ tools: Tool[] }>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools/all`)
+  }
+
+  // Tool preferences
+  async getToolPreferences(serverName: string): Promise<APIResponse<{ preferences: Record<string, ToolPreference> }>> {
+    return this.request<{ preferences: Record<string, ToolPreference> }>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools/preferences`)
+  }
+
+  async updateToolPreference(serverName: string, toolName: string, enabled: boolean): Promise<APIResponse<ToolPreference>> {
+    return this.request<ToolPreference>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools/preferences/${encodeURIComponent(toolName)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    })
+  }
+
+  async deleteToolPreference(serverName: string, toolName: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/v1/servers/${encodeURIComponent(serverName)}/tools/preferences/${encodeURIComponent(toolName)}`, {
+      method: 'DELETE',
+    })
   }
 
   // Tool-level quarantine (Spec 032)

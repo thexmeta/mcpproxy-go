@@ -1728,3 +1728,33 @@ func extractServerNameFromKey(key string) string {
 
 	return key[:lastUnderscore]
 }
+
+// Tool Preference Operations (implements management.StorageOperations)
+
+// GetToolPreference retrieves a tool preference record by server and tool name.
+func (m *Manager) GetToolPreference(serverName, toolName string) (*ToolPreferenceRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.db.GetToolPreference(serverName, toolName)
+}
+
+// ListToolPreferences returns all tool preference records for a server.
+func (m *Manager) ListToolPreferences(serverName string) ([]*ToolPreferenceRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.db.ListToolPreferences(serverName)
+}
+
+// SaveToolPreference saves a tool preference record.
+func (m *Manager) SaveToolPreference(record *ToolPreferenceRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.db.SaveToolPreference(record)
+}
+
+// DeleteToolPreference deletes a tool preference record.
+func (m *Manager) DeleteToolPreference(serverName, toolName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.db.DeleteToolPreference(serverName, toolName)
+}

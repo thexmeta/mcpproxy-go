@@ -822,7 +822,21 @@ func (r *Runtime) SaveConfiguration() error {
 		return fmt.Errorf("failed to clone configuration")
 	}
 
+	// Merge DisabledTools from in-memory config with servers from storage
+	// Storage may not have DisabledTools, so preserve them from configCopy
+	disabledToolsMap := make(map[string][]string)
+	for _, srv := range configCopy.Servers {
+		if len(srv.DisabledTools) > 0 {
+			disabledToolsMap[srv.Name] = srv.DisabledTools
+		}
+	}
+
 	// Update servers with latest from storage
+	for i := range latestServers {
+		if tools, ok := disabledToolsMap[latestServers[i].Name]; ok {
+			latestServers[i].DisabledTools = tools
+		}
+	}
 	configCopy.Servers = latestServers
 
 	r.logger.Debug("Saving configuration to disk",

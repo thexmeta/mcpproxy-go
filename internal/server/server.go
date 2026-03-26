@@ -120,6 +120,10 @@ func NewServerWithConfigPath(cfg *config.Config, configPath string, logger *zap.
 		secretResolver,  // SecretResolver
 		logger.Sugar(),
 	)
+	// Set storage for tool preference operations
+	if setup, ok := mgmtService.(management.InternalSetup); ok {
+		setup.SetStorage(rt.StorageManager())
+	}
 	rt.SetManagementService(mgmtService)
 
 	server := &Server{

@@ -76,7 +76,7 @@ func TestCheckWriteGates(t *testing.T) {
 				ReadOnlyMode:      tt.readOnlyMode,
 			}
 
-			svc := NewService(nil, cfg, "", &mockEventEmitter{}, nil, logger).(*service)
+			svc := NewService(nil, cfg, "", &mockEventEmitter{}, nil, logger).(*ServiceImpl)
 			err := svc.checkWriteGates()
 
 			if tt.expectError {
@@ -398,6 +398,21 @@ func (m *mockRuntimeOperations) GetServerTools(serverName string) ([]map[string]
 	}, nil
 }
 
+// GetAllServerTools implements RuntimeOperations for testing
+func (m *mockRuntimeOperations) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
+	if m.failOnServer != "" && serverName == m.failOnServer {
+		return nil, fmt.Errorf("server not found: %s", serverName)
+	}
+	if serverName == "" {
+		return nil, fmt.Errorf("server name required")
+	}
+	// Return all tools including disabled ones for testing
+	return []map[string]interface{}{
+		{"name": "test_tool", "description": "A test tool", "enabled": true},
+		{"name": "disabled_tool", "description": "A disabled tool", "enabled": false},
+	}, nil
+}
+
 // TriggerOAuthLogin implements RuntimeOperations for testing
 func (m *mockRuntimeOperations) TriggerOAuthLogin(serverName string) error {
 	if m.failOnServer != "" && serverName == m.failOnServer {
@@ -443,6 +458,19 @@ func (m *mockRuntimeOperations) RefreshOAuthToken(serverName string) error {
 	if serverName == "" {
 		return fmt.Errorf("server name required")
 	}
+	return nil
+}
+
+// UpdateServerDisabledTools implements RuntimeOperations for testing
+func (m *mockRuntimeOperations) UpdateServerDisabledTools(serverName string, disabledTools []string) error {
+	if serverName == "" {
+		return fmt.Errorf("server name required")
+	}
+	return nil
+}
+
+// SaveConfiguration implements RuntimeOperations for testing
+func (m *mockRuntimeOperations) SaveConfiguration() error {
 	return nil
 }
 

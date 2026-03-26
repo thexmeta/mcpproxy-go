@@ -943,6 +943,49 @@ func (c *Client) GetServerTools(ctx context.Context, serverName string) ([]map[s
 	return apiResp.Data.Tools, nil
 }
 
+// GetToolPreferences retrieves tool preferences for a specific server from daemon.
+func (c *Client) GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error) {
+	url := fmt.Sprintf("%s/api/v1/servers/%s/tools/preferences", c.baseURL, serverName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call tool preferences API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var apiResp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Preferences map[string]*contracts.ToolPreference `json:"preferences"`
+		} `json:"data"`
+		Error     string `json:"error"`
+		RequestID string `json:"request_id"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !apiResp.Success {
+		return nil, parseAPIError(apiResp.Error, apiResp.RequestID)
+	}
+
+	return apiResp.Data.Preferences, nil
+}
+
 // TriggerOAuthLogin initiates OAuth authentication flow for a server.
 // Returns *contracts.OAuthFlowError for structured OAuth errors (Spec 020).
 func (c *Client) TriggerOAuthLogin(ctx context.Context, serverName string) error {

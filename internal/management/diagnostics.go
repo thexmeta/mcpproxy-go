@@ -42,7 +42,7 @@ func extractHealthFromMap(srvRaw map[string]interface{}) (action, detail string)
 // Doctor aggregates health diagnostics from all system components.
 // This implements FR-009 through FR-013: comprehensive health diagnostics.
 // Refactored to aggregate from Health.Action (single source of truth).
-func (s *service) Doctor(ctx context.Context) (*contracts.Diagnostics, error) {
+func (s *ServiceImpl) Doctor(ctx context.Context) (*contracts.Diagnostics, error) {
 	// Get all servers from runtime
 	serversRaw, err := s.runtime.GetAllServers()
 	if err != nil {
@@ -173,7 +173,7 @@ func (s *service) Doctor(ctx context.Context) (*contracts.Diagnostics, error) {
 
 // checkDockerDaemon checks if Docker daemon is available and returns status.
 // This implements T042: helper for checking Docker availability.
-func (s *service) checkDockerDaemon() *contracts.DockerStatus {
+func (s *ServiceImpl) checkDockerDaemon() *contracts.DockerStatus {
 	status := &contracts.DockerStatus{
 		Available: false,
 	}

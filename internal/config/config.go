@@ -222,8 +222,36 @@ type ServerConfig struct {
 	Shared         bool              `json:"shared,omitempty" mapstructure:"shared"`                   // Server edition: shared with all users
 	Created        time.Time         `json:"created" mapstructure:"created"`
 	Updated        time.Time         `json:"updated,omitempty" mapstructure:"updated"`
-	Isolation      *IsolationConfig  `json:"isolation,omitempty" mapstructure:"isolation"`               // Per-server isolation settings
+	Isolation      *IsolationConfig  `json:"isolation,omitempty" mapstructure:"isolation"`           // Per-server isolation settings
 	ReconnectOnUse bool              `json:"reconnect_on_use,omitempty" mapstructure:"reconnect-on-use"` // Attempt reconnection when a tool call targets a disconnected server
+	DisabledTools  []string          `json:"disabled_tools,omitempty" mapstructure:"disabled_tools"` // Tools disabled for this server
+}
+
+// IsToolDisabled checks if a tool is in the disabled list
+func (s *ServerConfig) IsToolDisabled(toolName string) bool {
+	for _, t := range s.DisabledTools {
+		if t == toolName {
+			return true
+		}
+	}
+	return false
+}
+
+// DisableTool adds a tool to the disabled list
+func (s *ServerConfig) DisableTool(toolName string) {
+	if !s.IsToolDisabled(toolName) {
+		s.DisabledTools = append(s.DisabledTools, toolName)
+	}
+}
+
+// EnableTool removes a tool from the disabled list
+func (s *ServerConfig) EnableTool(toolName string) {
+	for i, t := range s.DisabledTools {
+		if t == toolName {
+			s.DisabledTools = append(s.DisabledTools[:i], s.DisabledTools[i+1:]...)
+			return
+		}
+	}
 }
 
 // OAuthConfig represents OAuth configuration for a server

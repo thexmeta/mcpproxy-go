@@ -240,6 +240,7 @@ export interface Tool {
   server: string
   input_schema?: Record<string, any>
   annotations?: ToolAnnotation
+  enabled?: boolean  // Present when fetched via /tools/all endpoint
 }
 
 // Tool approval types (Spec 032)
@@ -604,6 +605,17 @@ export interface CreateAgentTokenResponse {
   permissions: string[]
   expires_at: string
   created_at: string
+}
+
+// Tool preference types
+export interface ToolPreference {
+  tool_name: string
+  server_name: string
+  enabled: boolean
+  custom_name?: string
+  custom_description?: string
+  created_at: string
+  updated_at: string
 }
 
 // Import server configuration types

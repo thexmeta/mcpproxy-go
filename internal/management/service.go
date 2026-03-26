@@ -16,6 +16,7 @@ import (
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/contracts"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/reqcontext"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/secret"
+	"github.com/smart-mcp-proxy/mcpproxy-go/internal/storage"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/upstream/core"
 )
 
@@ -94,6 +95,12 @@ type Service interface {
 	// Returns error if server name is empty, server not found, or server not connected.
 	GetServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
 
+	// GetAllServerTools retrieves all tools including disabled ones.
+	// Unlike GetServerTools which filters disabled tools, this returns ALL tools
+	// with an "enabled" field so clients can see and re-enable disabled tools.
+	// Delegates to runtime's GetAllServerTools().
+	GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
+
 	// TriggerOAuthLogin initiates an OAuth 2.x authentication flow for a specific server.
 	// Delegates to upstream manager's StartManualOAuth() which launches browser-based flow.
 	// This operation respects disable_management and read_only configuration gates.
@@ -119,6 +126,32 @@ type Service interface {
 	// Returns BulkOperationResult with success/failure counts.
 	// This operation respects disable_management and read_only configuration gates.
 	LogoutAllOAuth(ctx context.Context) (*BulkOperationResult, error)
+
+	// Tool Preference Operations
+
+	// GetToolPreferences returns all tool preferences for a specific server.
+	// Returns empty map if server has no preferences configured.
+	GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error)
+
+	// UpdateToolPreference updates or creates a tool preference for a specific server/tool.
+	// This operation respects disable_management and read_only configuration gates.
+	UpdateToolPreference(ctx context.Context, serverName, toolName string, pref *contracts.ToolPreference) error
+
+	// BulkUpdateToolPreferences updates multiple tool preferences for a server atomically.
+	// Returns count of updated preferences and any errors encountered.
+	// This operation respects disable_management and read_only configuration gates.
+	BulkUpdateToolPreferences(ctx context.Context, serverName string, preferences map[string]*contracts.ToolPreference) (int, error)
+
+	// DeleteToolPreference deletes a tool preference for a specific server/tool.
+	// This operation respects disable_management and read_only configuration gates.
+	DeleteToolPreference(ctx context.Context, serverName, toolName string) error
+}
+
+// InternalSetup is an internal interface for setup operations that shouldn't be part of the public API.
+// This is used for wiring up dependencies after service creation.
+type InternalSetup interface {
+	// SetStorage sets the storage operations interface.
+	SetStorage(storage StorageOperations)
 }
 
 // EventEmitter defines the interface for emitting runtime events.
@@ -136,16 +169,31 @@ type RuntimeOperations interface {
 	BulkEnableServers(serverNames []string, enabled bool) (map[string]error, error)
 	GetServerTools(serverName string) ([]map[string]interface{}, error)
 	GetToolApproval(serverName, toolName string) (*storage.ToolApprovalRecord, error)
+	GetAllServerTools(serverName string) ([]map[string]interface{}, error)
 	TriggerOAuthLogin(serverName string) error
 	// TriggerOAuthLoginQuick returns browser status immediately (Spec 020 fix)
 	TriggerOAuthLoginQuick(serverName string) (*core.OAuthStartResult, error)
 	TriggerOAuthLogout(serverName string) error
 	RefreshOAuthToken(serverName string) error
+	// UpdateServerDisabledTools updates the disabled tools list for a server
+	UpdateServerDisabledTools(serverName string, disabledTools []string) error
+	// SaveConfiguration persists the runtime configuration to disk
+	SaveConfiguration() error
 }
 
-// service implements the Service interface with dependency injection.
-type service struct {
+// StorageOperations defines the interface for storage operations needed by the service.
+// This allows the service to access tool preferences without a direct storage dependency.
+type StorageOperations interface {
+	GetToolPreference(serverName, toolName string) (*storage.ToolPreferenceRecord, error)
+	ListToolPreferences(serverName string) ([]*storage.ToolPreferenceRecord, error)
+	SaveToolPreference(record *storage.ToolPreferenceRecord) error
+	DeleteToolPreference(serverName, toolName string) error
+}
+
+// ServiceImpl implements the Service interface with dependency injection.
+type ServiceImpl struct {
 	runtime        RuntimeOperations
+	storage        StorageOperations
 	config         *config.Config
 	configPath     string
 	eventEmitter   EventEmitter
@@ -163,8 +211,9 @@ func NewService(
 	secretResolver *secret.Resolver,
 	logger *zap.SugaredLogger,
 ) Service {
-	return &service{
+	return &ServiceImpl{
 		runtime:        runtime,
+		storage:        nil, // Can be set later via SetStorage
 		config:         cfg,
 		configPath:     configPath,
 		eventEmitter:   eventEmitter,
@@ -173,9 +222,15 @@ func NewService(
 	}
 }
 
+// SetStorage sets the storage operations interface.
+// This is called after service creation to avoid circular dependencies.
+func (s *ServiceImpl) SetStorage(storage StorageOperations) {
+	s.storage = storage
+}
+
 // checkWriteGates verifies if write operations are allowed based on configuration.
 // Returns an error if disable_management or read_only mode is enabled.
-func (s *service) checkWriteGates() error {
+func (s *ServiceImpl) checkWriteGates() error {
 	if s.config.DisableManagement {
 		return fmt.Errorf("management operations are disabled (disable_management=true)")
 	}
@@ -465,13 +520,13 @@ func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contra
 
 // GetServerLogs retrieves recent log entries for a specific server.
 // This is a read operation and never blocked by configuration gates.
-func (s *service) GetServerLogs(ctx context.Context, name string, tail int) ([]contracts.LogEntry, error) {
+func (s *ServiceImpl) GetServerLogs(ctx context.Context, name string, tail int) ([]contracts.LogEntry, error) {
 	// TODO: Implement later (not in critical path)
 	return nil, fmt.Errorf("not implemented")
 }
 
 // EnableServer enables or disables a specific upstream server.
-func (s *service) EnableServer(ctx context.Context, name string, enabled bool) error {
+func (s *ServiceImpl) EnableServer(ctx context.Context, name string, enabled bool) error {
 	// Check configuration gates
 	if err := s.checkWriteGates(); err != nil {
 		s.logger.Warnw("EnableServer blocked by configuration gate",
@@ -499,7 +554,7 @@ func (s *service) EnableServer(ctx context.Context, name string, enabled bool) e
 }
 
 // RestartServer stops and restarts a specific upstream server connection.
-func (s *service) RestartServer(ctx context.Context, name string) error {
+func (s *ServiceImpl) RestartServer(ctx context.Context, name string) error {
 	// Check configuration gates
 	if err := s.checkWriteGates(); err != nil {
 		s.logger.Warnw("RestartServer blocked by configuration gate",
@@ -524,7 +579,7 @@ func (s *service) RestartServer(ctx context.Context, name string) error {
 
 // T070: RestartAll restarts all configured servers sequentially.
 // Continues on partial failures and returns detailed results.
-func (s *service) RestartAll(ctx context.Context) (*BulkOperationResult, error) {
+func (s *ServiceImpl) RestartAll(ctx context.Context) (*BulkOperationResult, error) {
 	startTime := time.Now()
 	correlationID := reqcontext.GetCorrelationID(ctx)
 	source := reqcontext.GetRequestSource(ctx)
@@ -636,7 +691,7 @@ func (s *service) RestartAll(ctx context.Context) (*BulkOperationResult, error) 
 
 // T071: EnableAll enables all configured servers.
 // Continues on partial failures and returns detailed results.
-func (s *service) EnableAll(ctx context.Context) (*BulkOperationResult, error) {
+func (s *ServiceImpl) EnableAll(ctx context.Context) (*BulkOperationResult, error) {
 	startTime := time.Now()
 	correlationID := reqcontext.GetCorrelationID(ctx)
 	source := reqcontext.GetRequestSource(ctx)
@@ -730,7 +785,7 @@ func (s *service) EnableAll(ctx context.Context) (*BulkOperationResult, error) {
 
 // T072: DisableAll disables all configured servers.
 // Continues on partial failures and returns detailed results.
-func (s *service) DisableAll(ctx context.Context) (*BulkOperationResult, error) {
+func (s *ServiceImpl) DisableAll(ctx context.Context) (*BulkOperationResult, error) {
 	startTime := time.Now()
 	correlationID := reqcontext.GetCorrelationID(ctx)
 	source := reqcontext.GetRequestSource(ctx)
@@ -824,7 +879,7 @@ func (s *service) DisableAll(ctx context.Context) (*BulkOperationResult, error) 
 
 // GetServerTools retrieves all tools for a specific upstream server (T013).
 // This method delegates to runtime's GetServerTools() which reads from StateView cache.
-func (s *service) GetServerTools(ctx context.Context, name string) ([]map[string]interface{}, error) {
+func (s *ServiceImpl) GetServerTools(ctx context.Context, name string) ([]map[string]interface{}, error) {
 	// Validate input
 	if name == "" {
 		return nil, fmt.Errorf("server name required")
@@ -850,9 +905,26 @@ func (s *service) GetServerTools(ctx context.Context, name string) ([]map[string
 	return tools, nil
 }
 
+// GetAllServerTools retrieves all tools including disabled ones.
+// Unlike GetServerTools, this includes disabled tools with enabled=false flag.
+func (s *ServiceImpl) GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error) {
+	// Validate input
+	if name == "" {
+		return nil, fmt.Errorf("server name required")
+	}
+
+	// Delegate to runtime
+	tools, err := s.runtime.GetAllServerTools(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all tools: %w", err)
+	}
+
+	return tools, nil
+}
+
 // TriggerOAuthLogin initiates OAuth authentication flow for a server (T014).
 // This method checks config gates, delegates to runtime, and emits events on completion.
-func (s *service) TriggerOAuthLogin(ctx context.Context, name string) error {
+func (s *ServiceImpl) TriggerOAuthLogin(ctx context.Context, name string) error {
 	// Validate input
 	if name == "" {
 		return fmt.Errorf("server name required")
@@ -876,7 +948,7 @@ func (s *service) TriggerOAuthLogin(ctx context.Context, name string) error {
 
 // TriggerOAuthLoginQuick initiates OAuth and returns browser status immediately (Spec 020 fix).
 // Unlike TriggerOAuthLogin which runs fully async, this returns actual browser_opened, auth_url status.
-func (s *service) TriggerOAuthLoginQuick(ctx context.Context, name string) (*core.OAuthStartResult, error) {
+func (s *ServiceImpl) TriggerOAuthLoginQuick(ctx context.Context, name string) (*core.OAuthStartResult, error) {
 	// Validate input
 	if name == "" {
 		return nil, fmt.Errorf("server name required")
@@ -898,14 +970,14 @@ func (s *service) TriggerOAuthLoginQuick(ctx context.Context, name string) (*cor
 }
 
 // AuthStatus returns detailed OAuth authentication status for a specific server.
-func (s *service) AuthStatus(ctx context.Context, name string) (*contracts.AuthStatus, error) {
+func (s *ServiceImpl) AuthStatus(ctx context.Context, name string) (*contracts.AuthStatus, error) {
 	// TODO: Implement later (not in critical path)
 	return nil, fmt.Errorf("not implemented")
 }
 
 // TriggerOAuthLogout clears OAuth token and disconnects a specific server.
 // This method checks config gates, delegates to runtime, and emits events on completion.
-func (s *service) TriggerOAuthLogout(ctx context.Context, name string) error {
+func (s *ServiceImpl) TriggerOAuthLogout(ctx context.Context, name string) error {
 	correlationID := reqcontext.GetCorrelationID(ctx)
 	source := reqcontext.GetRequestSource(ctx)
 
@@ -954,7 +1026,7 @@ func (s *service) TriggerOAuthLogout(ctx context.Context, name string) error {
 
 // LogoutAllOAuth clears OAuth tokens for all OAuth-enabled servers.
 // Returns BulkOperationResult with success/failure counts.
-func (s *service) LogoutAllOAuth(ctx context.Context) (*BulkOperationResult, error) {
+func (s *ServiceImpl) LogoutAllOAuth(ctx context.Context) (*BulkOperationResult, error) {
 	startTime := time.Now()
 	correlationID := reqcontext.GetCorrelationID(ctx)
 	source := reqcontext.GetRequestSource(ctx)
@@ -1029,4 +1101,141 @@ func (s *service) LogoutAllOAuth(ctx context.Context) (*BulkOperationResult, err
 	}
 
 	return result, nil
+}
+
+// Tool Preference Operations
+
+// GetToolPreferences returns all tool preferences for a specific server.
+// Reads from config's DisabledTools field.
+func (s *ServiceImpl) GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error) {
+	result := make(map[string]*contracts.ToolPreference)
+
+	for _, server := range s.config.Servers {
+		if server.Name == serverName {
+			// Convert DisabledTools slice to ToolPreference map
+			for _, toolName := range server.DisabledTools {
+				result[toolName] = &contracts.ToolPreference{
+					Enabled:      false,
+					OriginalName: toolName,
+				}
+			}
+			break
+		}
+	}
+
+	return result, nil
+}
+
+// UpdateToolPreference updates or creates a tool preference for a specific server/tool.
+func (s *ServiceImpl) UpdateToolPreference(ctx context.Context, serverName, toolName string, pref *contracts.ToolPreference) error {
+	// Check configuration gates
+	if err := s.checkWriteGates(); err != nil {
+		return err
+	}
+
+	// Get current disabled tools list
+	var disabledTools []string
+	for _, server := range s.config.Servers {
+		if server.Name == serverName {
+			disabledTools = server.DisabledTools
+			break
+		}
+	}
+
+	// Update based on enabled state
+	if pref.Enabled {
+		// Enable tool - remove from disabled list
+		disabledTools = removeFromSlice(disabledTools, toolName)
+	} else {
+		// Disable tool - add to disabled list
+		disabledTools = addToSlice(disabledTools, toolName)
+	}
+
+	// Update runtime config
+	if err := s.runtime.UpdateServerDisabledTools(serverName, disabledTools); err != nil {
+		return fmt.Errorf("failed to update disabled tools: %w", err)
+	}
+
+	// Save configuration to disk
+	if err := s.runtime.SaveConfiguration(); err != nil {
+		s.logger.Warnw("Failed to save configuration after updating tool preference",
+			"server", serverName, "tool", toolName, "error", err)
+		// Don't fail the operation, config is updated in memory
+	}
+
+	return nil
+}
+
+// BulkUpdateToolPreferences updates multiple tool preferences for a server atomically.
+func (s *ServiceImpl) BulkUpdateToolPreferences(ctx context.Context, serverName string, preferences map[string]*contracts.ToolPreference) (int, error) {
+	// Check configuration gates
+	if err := s.checkWriteGates(); err != nil {
+		return 0, err
+	}
+
+	// Get current disabled tools list
+	var disabledTools []string
+	for _, server := range s.config.Servers {
+		if server.Name == serverName {
+			disabledTools = server.DisabledTools
+			break
+		}
+	}
+
+	updated := 0
+	for toolName, pref := range preferences {
+		if pref.Enabled {
+			disabledTools = removeFromSlice(disabledTools, toolName)
+		} else {
+			disabledTools = addToSlice(disabledTools, toolName)
+		}
+		updated++
+	}
+
+	// Update runtime config
+	if err := s.runtime.UpdateServerDisabledTools(serverName, disabledTools); err != nil {
+		return 0, fmt.Errorf("failed to update disabled tools: %w", err)
+	}
+
+	// Save configuration to disk
+	if err := s.runtime.SaveConfiguration(); err != nil {
+		s.logger.Warnw("Failed to save configuration after bulk updating tool preferences",
+			"server", serverName, "error", err)
+	}
+
+	return updated, nil
+}
+
+// DeleteToolPreference deletes a tool preference for a specific server/tool.
+func (s *ServiceImpl) DeleteToolPreference(ctx context.Context, serverName, toolName string) error {
+	// Check configuration gates
+	if err := s.checkWriteGates(); err != nil {
+		return err
+	}
+
+	// Enable the tool (remove from disabled list)
+	if err := s.UpdateToolPreference(ctx, serverName, toolName, &contracts.ToolPreference{Enabled: true}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Helper functions for slice manipulation
+func addToSlice(slice []string, item string) []string {
+	for _, s := range slice {
+		if s == item {
+			return slice // Already exists
+		}
+	}
+	return append(slice, item)
+}
+
+func removeFromSlice(slice []string, item string) []string {
+	for i, s := range slice {
+		if s == item {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
 }

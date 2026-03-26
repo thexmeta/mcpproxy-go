@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -42,6 +46,40 @@ Examples:
 		RunE: runToolsList,
 	}
 
+	toolsPreferencesCmd = &cobra.Command{
+		Use:   "preferences",
+		Short: "Manage tool preferences",
+		Long:  "Commands for managing tool preferences (enable/disable, custom names)",
+	}
+
+	toolsPrefsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List tool preferences for a server",
+		Long:  "List all tool preferences (enable/disable state, custom names) for a specific server",
+		RunE:  runToolsPrefsList,
+	}
+
+	toolsPrefsEnableCmd = &cobra.Command{
+		Use:   "enable <server> <tool>",
+		Short: "Enable a tool",
+		Long:  "Enable a specific tool for a server",
+		RunE:  runToolsPrefsEnable,
+	}
+
+	toolsPrefsDisableCmd = &cobra.Command{
+		Use:   "disable <server> <tool>",
+		Short: "Disable a tool",
+		Long:  "Disable a specific tool for a server (hides it from AI agents)",
+		RunE:  runToolsPrefsDisable,
+	}
+
+	toolsPrefsToggleCmd = &cobra.Command{
+		Use:   "toggle <server> <tool>",
+		Short: "Toggle tool enable/disable state",
+		Long:  "Toggle the enable/disable state of a specific tool",
+		RunE:  runToolsPrefsToggle,
+	}
+
 	// Command flags
 	serverName     string
 	toolsLogLevel  string
@@ -58,6 +96,13 @@ func GetToolsCommand() *cobra.Command {
 func init() {
 	// toolsCmd will be added to rootCmd in main.go
 	toolsCmd.AddCommand(toolsListCmd)
+	toolsCmd.AddCommand(toolsPreferencesCmd)
+
+	// Add preference subcommands
+	toolsPreferencesCmd.AddCommand(toolsPrefsListCmd)
+	toolsPreferencesCmd.AddCommand(toolsPrefsEnableCmd)
+	toolsPreferencesCmd.AddCommand(toolsPrefsDisableCmd)
+	toolsPreferencesCmd.AddCommand(toolsPrefsToggleCmd)
 
 	// Define flags for tools list command
 	toolsListCmd.Flags().StringVarP(&serverName, "server", "s", "", "Name of the upstream server to query (required)")
@@ -85,6 +130,18 @@ func init() {
 
   # Set custom timeout
   mcpproxy tools list --server=slow-server --timeout=60s`
+
+	// Preference commands examples
+	toolsPrefsListCmd.Example = `  mcpproxy tools preferences list --server=github-server
+  mcpproxy tools preferences list -s weather-api`
+
+	toolsPrefsEnableCmd.Example = `  mcpproxy tools preferences enable github-server create_issue
+  mcpproxy tools preferences enable my-server dangerous_tool`
+
+	toolsPrefsDisableCmd.Example = `  mcpproxy tools preferences disable github-server delete_file
+  mcpproxy tools preferences disable my-server risky_operation`
+
+	toolsPrefsToggleCmd.Example = `  mcpproxy tools preferences toggle github-server some_tool`
 }
 
 func runToolsList(_ *cobra.Command, _ []string) error {
@@ -371,4 +428,195 @@ func runToolsListStandalone(ctx context.Context, serverName string, globalConfig
 	}
 
 	return outputToolsFromMetadata(tools, serverName)
+}
+
+// runToolsPrefsList lists tool preferences for a server
+func runToolsPrefsList(_ *cobra.Command, _ []string) error {
+	if serverName == "" {
+		return fmt.Errorf("--server flag is required")
+	}
+
+	// Get socket path for daemon communication
+	dataDir := getDefaultDataDir()
+	socketPath := socket.DetectSocketPath(dataDir)
+
+	if !socket.IsSocketAvailable(socketPath) {
+		return fmt.Errorf("daemon not running at %s. Start with 'mcpproxy serve' first", socketPath)
+	}
+
+	client := cliclient.NewClient(socketPath, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	prefs, err := client.GetToolPreferences(ctx, serverName)
+	if err != nil {
+		return fmt.Errorf("failed to get tool preferences: %w", err)
+	}
+
+	outputFormat := ResolveOutputFormat()
+	formatter, err := GetOutputFormatter()
+	if err != nil {
+		return err
+	}
+
+	if outputFormat == "table" {
+		headers := []string{"TOOL", "ENABLED", "CUSTOM NAME", "CUSTOM DESCRIPTION"}
+		var rows [][]string
+		for toolName, pref := range prefs {
+			enabled := "✓"
+			if !pref.Enabled {
+				enabled = "✗"
+			}
+			customName := pref.CustomName
+			if customName == "" {
+				customName = "-"
+			}
+			customDesc := pref.CustomDescription
+			if customDesc == "" {
+				customDesc = "-"
+			}
+			rows = append(rows, []string{toolName, enabled, customName, customDesc})
+		}
+
+		result, err := formatter.FormatTable(headers, rows)
+		if err != nil {
+			return fmt.Errorf("failed to format table: %w", err)
+		}
+		fmt.Print(result)
+	} else {
+		// JSON/YAML format
+		result, err := formatter.Format(prefs)
+		if err != nil {
+			return fmt.Errorf("failed to format output: %w", err)
+		}
+		fmt.Println(result)
+	}
+
+	return nil
+}
+
+// runToolsPrefsEnable enables a tool
+func runToolsPrefsEnable(_ *cobra.Command, args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: mcpproxy tools preferences enable <server> <tool>")
+	}
+	server := args[0]
+	tool := args[1]
+
+	return updateToolPreference(server, tool, true)
+}
+
+// runToolsPrefsDisable disables a tool
+func runToolsPrefsDisable(_ *cobra.Command, args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: mcpproxy tools preferences disable <server> <tool>")
+	}
+	server := args[0]
+	tool := args[1]
+
+	return updateToolPreference(server, tool, false)
+}
+
+// runToolsPrefsToggle toggles tool enable/disable state
+func runToolsPrefsToggle(_ *cobra.Command, args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: mcpproxy tools preferences toggle <server> <tool>")
+	}
+	server := args[0]
+	tool := args[1]
+
+	// Get current preferences
+	dataDir := getDefaultDataDir()
+	socketPath := socket.DetectSocketPath(dataDir)
+
+	if !socket.IsSocketAvailable(socketPath) {
+		return fmt.Errorf("daemon not running. Start with 'mcpproxy serve' first")
+	}
+
+	client := cliclient.NewClient(socketPath, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	prefs, err := client.GetToolPreferences(ctx, server)
+	if err != nil {
+		return fmt.Errorf("failed to get current preferences: %w", err)
+	}
+
+	// Toggle the state
+	currentEnabled := true
+	if pref, ok := prefs[tool]; ok {
+		currentEnabled = pref.Enabled
+	}
+
+	return updateToolPreference(server, tool, !currentEnabled)
+}
+
+// updateToolPreference updates a tool preference via HTTP API
+func updateToolPreference(server, tool string, enabled bool) error {
+	dataDir := getDefaultDataDir()
+	socketPath := socket.DetectSocketPath(dataDir)
+
+	if !socket.IsSocketAvailable(socketPath) {
+		return fmt.Errorf("daemon not running. Start with 'mcpproxy serve' first")
+	}
+
+	// Build API URL
+	apiURL := buildSocketURL(socketPath, fmt.Sprintf("/api/v1/servers/%s/tools/preferences/%s", server, tool))
+
+	// Build request body
+	body := map[string]interface{}{
+		"enabled": enabled,
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Make PUT request
+	req, err := http.NewRequest("PUT", apiURL, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (%s): %s", resp.Status, string(body))
+	}
+
+	action := "enabled"
+	if !enabled {
+		action = "disabled"
+	}
+	fmt.Printf("✅ Tool '%s' %s on server '%s'\n", tool, action, server)
+	return nil
+}
+
+// getDefaultDataDir returns the default data directory
+func getDefaultDataDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(homeDir, ".mcpproxy")
+}
+
+// buildSocketURL builds a URL for socket communication
+func buildSocketURL(socketPath, path string) string {
+	// For Windows named pipes
+	if len(socketPath) > 8 && socketPath[:8] == "npipe://" {
+		return socketPath + path
+	}
+	// For Unix sockets
+	if len(socketPath) > 7 && socketPath[:7] == "unix://" {
+		return socketPath + path
+	}
+	return socketPath + path
 }

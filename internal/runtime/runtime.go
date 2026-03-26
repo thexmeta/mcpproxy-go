@@ -249,6 +249,12 @@ func New(cfg *config.Config, cfgPath string, logger *zap.Logger) (*Runtime, erro
 		phaseMachine: newPhaseMachine(PhaseInitializing),
 	}
 
+	// Migrate tool preferences from BBolt storage to JSON config
+	if err := rt.MigrateToolPreferencesFromStorage(); err != nil {
+		logger.Warn("Failed to migrate tool preferences from storage", zap.Error(err))
+		// Don't fail startup, just log the error
+	}
+
 	return rt, nil
 }
 
@@ -1929,10 +1935,10 @@ func (r *Runtime) getAllServersLegacy() ([]map[string]interface{}, error) {
 
 // GetServerTools implements RuntimeOperations interface for management service.
 // Returns all tools for a specific upstream server from StateView cache (lock-free read).
+// Filters out disabled tools based on ServerConfig.DisabledTools.
 func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, error) {
 	r.logger.Debug("Runtime.GetServerTools called", zap.String("server", serverName))
 
-	// Use Supervisor's StateView for lock-free, instant reads
 	if r.supervisor == nil {
 		return nil, fmt.Errorf("supervisor not available")
 	}
@@ -1942,21 +1948,28 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 		return nil, fmt.Errorf("StateView not available")
 	}
 
-	// Get snapshot - this is lock-free and instant
 	snapshot := stateView.Snapshot()
 	serverStatus, exists := snapshot.Servers[serverName]
 	if !exists {
 		return nil, fmt.Errorf("server not found: %s", serverName)
 	}
 
-	// Convert []stateview.ToolInfo to []map[string]interface{}
+	// Get disabled tools from server config
+	disabledTools := r.getDisabledToolsFromConfig(serverName)
+
 	tools := make([]map[string]interface{}, 0, len(serverStatus.Tools))
 	for _, tool := range serverStatus.Tools {
+		// Skip disabled tools
+		if disabledTools[tool.Name] {
+			continue
+		}
+
 		toolMap := map[string]interface{}{
 			"name":        tool.Name,
 			"description": tool.Description,
 			"server_name": serverName,
 		}
+
 		if tool.InputSchema != nil {
 			toolMap["inputSchema"] = tool.InputSchema
 		}
@@ -1967,6 +1980,145 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 	}
 
 	return tools, nil
+}
+
+// GetAllServerTools returns ALL tools for a specific server including disabled ones.
+// Unlike GetServerTools, this does NOT filter disabled tools - they are included
+// with an "enabled: false" field so clients can see and re-enable them.
+func (r *Runtime) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
+	r.logger.Debug("Runtime.GetAllServerTools called", zap.String("server", serverName))
+
+	if r.supervisor == nil {
+		return nil, fmt.Errorf("supervisor not available")
+	}
+
+	stateView := r.supervisor.StateView()
+	if stateView == nil {
+		return nil, fmt.Errorf("StateView not available")
+	}
+
+	snapshot := stateView.Snapshot()
+	serverStatus, exists := snapshot.Servers[serverName]
+	if !exists {
+		return nil, fmt.Errorf("server not found: %s", serverName)
+	}
+
+	// Get disabled tools from server config
+	disabledTools := r.getDisabledToolsFromConfig(serverName)
+
+	// Convert []stateview.ToolInfo to []map[string]interface{}
+	// Include ALL tools - disabled ones are marked with enabled: false
+	tools := make([]map[string]interface{}, 0, len(serverStatus.Tools))
+	for _, tool := range serverStatus.Tools {
+		toolMap := map[string]interface{}{
+			"name":        tool.Name,
+			"description": tool.Description,
+			"server_name": serverName,
+			"enabled":     !disabledTools[tool.Name],
+		}
+
+		if tool.InputSchema != nil {
+			toolMap["inputSchema"] = tool.InputSchema
+		}
+		if tool.Annotations != nil {
+			toolMap["annotations"] = tool.Annotations
+		}
+		tools = append(tools, toolMap)
+	}
+
+	return tools, nil
+}
+
+// getDisabledToolsFromConfig returns a map of disabled tool names for a server
+func (r *Runtime) getDisabledToolsFromConfig(serverName string) map[string]bool {
+	disabledTools := make(map[string]bool)
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.cfg == nil {
+		return disabledTools
+	}
+
+	for _, server := range r.cfg.Servers {
+		if server.Name == serverName {
+			for _, tool := range server.DisabledTools {
+				disabledTools[tool] = true
+			}
+			break
+		}
+	}
+
+	return disabledTools
+}
+
+// MigrateToolPreferencesFromStorage migrates tool preferences from BBolt storage to JSON config.
+// This should be called during startup to migrate existing preferences.
+func (r *Runtime) MigrateToolPreferencesFromStorage() error {
+	if r.storageManager == nil {
+		return nil // No storage, nothing to migrate
+	}
+
+	r.logger.Info("Migrating tool preferences from BBolt storage to JSON config")
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	anyMigrated := false
+
+	for _, server := range r.cfg.Servers {
+		// Get existing disabled tools from config
+		existingDisabled := make(map[string]bool)
+		for _, tool := range server.DisabledTools {
+			existingDisabled[tool] = true
+		}
+
+		// Get preferences from storage
+		records, err := r.storageManager.ListToolPreferences(server.Name)
+		if err != nil {
+			r.logger.Warn("Failed to list tool preferences from storage",
+				zap.String("server", server.Name),
+				zap.Error(err))
+			continue
+		}
+
+		// Check if there are any disabled tools in storage
+		hasStorageDisabled := false
+		for _, record := range records {
+			if !record.Enabled {
+				hasStorageDisabled = true
+				if !existingDisabled[record.ToolName] {
+					// New disabled tool found in storage
+					server.DisabledTools = append(server.DisabledTools, record.ToolName)
+					existingDisabled[record.ToolName] = true
+					anyMigrated = true
+					r.logger.Info("Migrated disabled tool from storage",
+						zap.String("server", server.Name),
+						zap.String("tool", record.ToolName))
+				}
+			}
+		}
+
+		// If we migrated any tools, save the config
+		if hasStorageDisabled && anyMigrated {
+			r.logger.Info("Tool preferences migration completed for server",
+				zap.String("server", server.Name),
+				zap.Int("total_disabled", len(server.DisabledTools)))
+		}
+	}
+
+	if anyMigrated {
+		// Save the configuration
+		if err := r.SaveConfiguration(); err != nil {
+			r.logger.Error("Failed to save configuration after migrating tool preferences", zap.Error(err))
+			return err
+		}
+		r.logger.Info("Tool preferences migration completed and configuration saved")
+	} else {
+		r.logger.Info("No tool preferences to migrate from BBolt storage")
+	}
+
+	return nil
 }
 
 // TriggerOAuthLogin implements RuntimeOperations interface for management service.
@@ -2082,6 +2234,34 @@ func (r *Runtime) RefreshOAuthToken(serverName string) error {
 			return diagnostics.WrapOAuthRefresh403(wrapped)
 		}
 		return wrapped
+	}
+
+	return nil
+}
+
+// UpdateServerDisabledTools implements RuntimeOperations interface.
+// Updates the disabled tools list for a server and saves the configuration.
+func (r *Runtime) UpdateServerDisabledTools(serverName string, disabledTools []string) error {
+	r.logger.Debug("Runtime.UpdateServerDisabledTools called", zap.String("server", serverName), zap.Strings("disabled", disabledTools))
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.cfg == nil {
+		return fmt.Errorf("config not initialized")
+	}
+
+	found := false
+	for _, server := range r.cfg.Servers {
+		if server.Name == serverName {
+			server.DisabledTools = disabledTools
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("server not found: %s", serverName)
 	}
 
 	return nil

@@ -12,6 +12,7 @@ const (
 	ToolStatsBucket       = "toolstats"
 	ToolHashBucket        = "toolhash"
 	ToolApprovalBucket    = "tool_approvals"
+	ToolPreferenceBucket  = "tool_preferences"
 	OAuthTokenBucket      = "oauth_tokens" //nolint:gosec // bucket name, not a credential
 	OAuthCompletionBucket = "oauth_completion"
 	MetaBucket            = "meta"
@@ -101,6 +102,39 @@ func ToolApprovalKey(serverName, toolName string) string {
 // Key returns the storage key for this tool approval record.
 func (r *ToolApprovalRecord) Key() string {
 	return ToolApprovalKey(r.ServerName, r.ToolName)
+}
+
+// ToolPreferenceRecord represents a tool's preference configuration.
+// Preferences allow per-server tool customization including enable/disable state,
+// custom names, and custom descriptions for better AI agent control.
+type ToolPreferenceRecord struct {
+	ServerName          string    `json:"server_name"`           // Server name (part of key)
+	ToolName            string    `json:"tool_name"`             // Original tool name (part of key)
+	Enabled             bool      `json:"enabled"`               // Whether tool is enabled
+	CustomName          string    `json:"custom_name,omitempty"` // Custom display name (optional)
+	CustomDescription   string    `json:"custom_description,omitempty"` // Custom description (optional)
+	Created             time.Time `json:"created"`
+	Updated             time.Time `json:"updated"`
+}
+
+// ToolPreferenceKey returns the storage key for a tool preference record.
+func ToolPreferenceKey(serverName, toolName string) string {
+	return serverName + ":" + toolName
+}
+
+// Key returns the storage key for this tool preference record.
+func (r *ToolPreferenceRecord) Key() string {
+	return ToolPreferenceKey(r.ServerName, r.ToolName)
+}
+
+// MarshalBinary implements encoding.BinaryMarshaler
+func (r *ToolPreferenceRecord) MarshalBinary() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+// UnmarshalBinary implements encoding.BinaryUnmarshaler
+func (r *ToolPreferenceRecord) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, r)
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler
