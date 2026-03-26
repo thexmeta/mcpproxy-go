@@ -1936,6 +1936,7 @@ func (r *Runtime) getAllServersLegacy() ([]map[string]interface{}, error) {
 // GetServerTools implements RuntimeOperations interface for management service.
 // Returns all tools for a specific upstream server from StateView cache (lock-free read).
 // Filters out disabled tools based on ServerConfig.DisabledTools.
+// Applies custom tool names and descriptions from preferences if available.
 func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, error) {
 	r.logger.Debug("Runtime.GetServerTools called", zap.String("server", serverName))
 
@@ -1957,6 +1958,9 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 	// Get disabled tools from server config
 	disabledTools := r.getDisabledToolsFromConfig(serverName)
 
+	// Get tool preferences from storage (for custom names/descriptions)
+	toolPrefs := r.getToolPreferencesFromStorage(serverName)
+
 	tools := make([]map[string]interface{}, 0, len(serverStatus.Tools))
 	for _, tool := range serverStatus.Tools {
 		// Skip disabled tools
@@ -1964,9 +1968,21 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 			continue
 		}
 
+		// Apply custom name and description from preferences if available
+		name := tool.Name
+		description := tool.Description
+		if pref, ok := toolPrefs[tool.Name]; ok {
+			if pref.CustomName != "" {
+				name = pref.CustomName
+			}
+			if pref.CustomDescription != "" {
+				description = pref.CustomDescription
+			}
+		}
+
 		toolMap := map[string]interface{}{
-			"name":        tool.Name,
-			"description": tool.Description,
+			"name":        name,
+			"description": description,
 			"server_name": serverName,
 		}
 
@@ -1985,6 +2001,7 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 // GetAllServerTools returns ALL tools for a specific server including disabled ones.
 // Unlike GetServerTools, this does NOT filter disabled tools - they are included
 // with an "enabled: false" field so clients can see and re-enable them.
+// Applies custom tool names and descriptions from preferences if available.
 func (r *Runtime) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
 	r.logger.Debug("Runtime.GetAllServerTools called", zap.String("server", serverName))
 
@@ -2006,13 +2023,28 @@ func (r *Runtime) GetAllServerTools(serverName string) ([]map[string]interface{}
 	// Get disabled tools from server config
 	disabledTools := r.getDisabledToolsFromConfig(serverName)
 
+	// Get tool preferences from storage (for custom names/descriptions)
+	toolPrefs := r.getToolPreferencesFromStorage(serverName)
+
 	// Convert []stateview.ToolInfo to []map[string]interface{}
 	// Include ALL tools - disabled ones are marked with enabled: false
 	tools := make([]map[string]interface{}, 0, len(serverStatus.Tools))
 	for _, tool := range serverStatus.Tools {
+		// Apply custom name and description from preferences if available
+		name := tool.Name
+		description := tool.Description
+		if pref, ok := toolPrefs[tool.Name]; ok {
+			if pref.CustomName != "" {
+				name = pref.CustomName
+			}
+			if pref.CustomDescription != "" {
+				description = pref.CustomDescription
+			}
+		}
+
 		toolMap := map[string]interface{}{
-			"name":        tool.Name,
-			"description": tool.Description,
+			"name":        name,
+			"description": description,
 			"server_name": serverName,
 			"enabled":     !disabledTools[tool.Name],
 		}
@@ -2050,6 +2082,31 @@ func (r *Runtime) getDisabledToolsFromConfig(serverName string) map[string]bool 
 	}
 
 	return disabledTools
+}
+
+// getToolPreferencesFromStorage retrieves tool preferences from BBolt storage.
+// Returns a map of tool name to preference record (includes custom name/description).
+// Returns empty map if storage is not available or no preferences exist.
+func (r *Runtime) getToolPreferencesFromStorage(serverName string) map[string]*storage.ToolPreferenceRecord {
+	prefs := make(map[string]*storage.ToolPreferenceRecord)
+
+	if r.storageManager == nil {
+		return prefs
+	}
+
+	records, err := r.storageManager.ListToolPreferences(serverName)
+	if err != nil {
+		r.logger.Debug("Failed to list tool preferences from storage",
+			zap.String("server", serverName),
+			zap.Error(err))
+		return prefs
+	}
+
+	for _, record := range records {
+		prefs[record.ToolName] = record
+	}
+
+	return prefs
 }
 
 // MigrateToolPreferencesFromStorage migrates tool preferences from BBolt storage to JSON config.

@@ -200,7 +200,9 @@ func (s *Server) SetTokenStore(store TokenStore, dataDir string) {
 	s.dataDir = dataDir
 }
 
-// SetFeedbackSubmitter configures the feedback submission handler (Spec 036).
+// SetFeedbackSubmitter configures feedback submission on the server.
+// This must be called after NewServer and before serving requests
+// to enable the /api/v1/feedback endpoint.
 func (s *Server) SetFeedbackSubmitter(submitter FeedbackSubmitter) {
 	s.feedbackSubmitter = submitter
 }

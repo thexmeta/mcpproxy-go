@@ -80,6 +80,30 @@ Examples:
 		RunE:  runToolsPrefsToggle,
 	}
 
+	toolsPrefsRenameCmd = &cobra.Command{
+		Use:   "rename <server> <tool> <new-name>",
+		Short: "Rename a tool",
+		Long:  "Set a custom name for a tool (overrides the original tool name from the MCP server)",
+		Args:  cobra.ExactArgs(3),
+		RunE:  runToolsPrefsRename,
+	}
+
+	toolsPrefsDescribeCmd = &cobra.Command{
+		Use:   "describe <server> <tool> <description>",
+		Short: "Set custom tool description",
+		Long:  "Set a custom description for a tool (overrides the original description from the MCP server)",
+		Args:  cobra.ExactArgs(3),
+		RunE:  runToolsPrefsDescribe,
+	}
+
+	toolsPrefsResetCmd = &cobra.Command{
+		Use:   "reset <server> <tool>",
+		Short: "Reset tool preferences to defaults",
+		Long:  "Reset a tool's custom name, description, and enabled state to defaults",
+		Args:  cobra.ExactArgs(2),
+		RunE:  runToolsPrefsReset,
+	}
+
 	// Command flags
 	serverName     string
 	toolsLogLevel  string
@@ -103,6 +127,9 @@ func init() {
 	toolsPreferencesCmd.AddCommand(toolsPrefsEnableCmd)
 	toolsPreferencesCmd.AddCommand(toolsPrefsDisableCmd)
 	toolsPreferencesCmd.AddCommand(toolsPrefsToggleCmd)
+	toolsPreferencesCmd.AddCommand(toolsPrefsRenameCmd)
+	toolsPreferencesCmd.AddCommand(toolsPrefsDescribeCmd)
+	toolsPreferencesCmd.AddCommand(toolsPrefsResetCmd)
 
 	// Define flags for tools list command
 	toolsListCmd.Flags().StringVarP(&serverName, "server", "s", "", "Name of the upstream server to query (required)")
@@ -142,6 +169,15 @@ func init() {
   mcpproxy tools preferences disable my-server risky_operation`
 
 	toolsPrefsToggleCmd.Example = `  mcpproxy tools preferences toggle github-server some_tool`
+
+	toolsPrefsRenameCmd.Example = `  mcpproxy tools preferences rename github-server create_issue create_github_issue
+  mcpproxy tools preferences rename my-server old_tool_name new_tool_name`
+
+	toolsPrefsDescribeCmd.Example = `  mcpproxy tools preferences describe github-server create_issue "Creates a new GitHub issue in the specified repository"
+  mcpproxy tools preferences describe my-server my_tool "Custom description for this tool"`
+
+	toolsPrefsResetCmd.Example = `  mcpproxy tools preferences reset github-server create_issue
+  mcpproxy tools preferences reset my-server my_tool`
 }
 
 func runToolsList(_ *cobra.Command, _ []string) error {
@@ -549,6 +585,144 @@ func runToolsPrefsToggle(_ *cobra.Command, args []string) error {
 	}
 
 	return updateToolPreference(server, tool, !currentEnabled)
+}
+
+// runToolsPrefsRename sets a custom name for a tool
+func runToolsPrefsRename(_ *cobra.Command, args []string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("usage: mcpproxy tools preferences rename <server> <tool> <new-name>")
+	}
+	server := args[0]
+	tool := args[1]
+	newName := args[2]
+
+	return updateToolCustomFields(server, tool, newName, "")
+}
+
+// runToolsPrefsDescribe sets a custom description for a tool
+func runToolsPrefsDescribe(_ *cobra.Command, args []string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("usage: mcpproxy tools preferences describe <server> <tool> <description>")
+	}
+	server := args[0]
+	tool := args[1]
+	description := args[2]
+
+	return updateToolCustomFields(server, tool, "", description)
+}
+
+// runToolsPrefsReset resets a tool's preferences to defaults
+func runToolsPrefsReset(_ *cobra.Command, args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: mcpproxy tools preferences reset <server> <tool>")
+	}
+	server := args[0]
+	tool := args[1]
+
+	dataDir := getDefaultDataDir()
+	socketPath := socket.DetectSocketPath(dataDir)
+
+	if !socket.IsSocketAvailable(socketPath) {
+		return fmt.Errorf("daemon not running. Start with 'mcpproxy serve' first")
+	}
+
+	// Build API URL for DELETE request
+	apiURL := buildSocketURL(socketPath, fmt.Sprintf("/api/v1/servers/%s/tools/preferences/%s", server, tool))
+
+	// Make DELETE request
+	req, err := http.NewRequest("DELETE", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (%s): %s", resp.Status, string(body))
+	}
+
+	fmt.Printf("✅ Tool '%s' preferences reset to defaults on server '%s'\n", tool, server)
+	return nil
+}
+
+// updateToolCustomFields updates custom name and/or description for a tool via HTTP API
+func updateToolCustomFields(server, tool, customName, customDescription string) error {
+	dataDir := getDefaultDataDir()
+	socketPath := socket.DetectSocketPath(dataDir)
+
+	if !socket.IsSocketAvailable(socketPath) {
+		return fmt.Errorf("daemon not running. Start with 'mcpproxy serve' first")
+	}
+
+	// Get current preferences to preserve enabled state
+	client := cliclient.NewClient(socketPath, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	prefs, err := client.GetToolPreferences(ctx, server)
+	if err != nil {
+		return fmt.Errorf("failed to get current preferences: %w", err)
+	}
+
+	// Get current enabled state
+	enabled := true
+	if pref, ok := prefs[tool]; ok {
+		enabled = pref.Enabled
+	}
+
+	// Build API URL
+	apiURL := buildSocketURL(socketPath, fmt.Sprintf("/api/v1/servers/%s/tools/preferences/%s", server, tool))
+
+	// Build request body with custom fields
+	body := map[string]interface{}{
+		"enabled": enabled,
+	}
+	if customName != "" {
+		body["custom_name"] = customName
+	}
+	if customDescription != "" {
+		body["custom_description"] = customDescription
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Make PUT request
+	req, err := http.NewRequest("PUT", apiURL, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (%s): %s", resp.Status, string(body))
+	}
+
+	if customName != "" && customDescription != "" {
+		fmt.Printf("✅ Tool '%s' renamed to '%s' with custom description on server '%s'\n", tool, customName, server)
+	} else if customName != "" {
+		fmt.Printf("✅ Tool '%s' renamed to '%s' on server '%s'\n", tool, customName, server)
+	} else if customDescription != "" {
+		fmt.Printf("✅ Tool '%s' description updated on server '%s'\n", tool, server)
+	}
+
+	return nil
 }
 
 // updateToolPreference updates a tool preference via HTTP API

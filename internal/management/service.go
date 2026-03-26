@@ -1106,20 +1106,28 @@ func (s *ServiceImpl) LogoutAllOAuth(ctx context.Context) (*BulkOperationResult,
 // Tool Preference Operations
 
 // GetToolPreferences returns all tool preferences for a specific server.
-// Reads from config's DisabledTools field.
+// Reads from BBolt storage to get custom names, descriptions, and enabled state.
 func (s *ServiceImpl) GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error) {
 	result := make(map[string]*contracts.ToolPreference)
 
-	for _, server := range s.config.Servers {
-		if server.Name == serverName {
-			// Convert DisabledTools slice to ToolPreference map
-			for _, toolName := range server.DisabledTools {
-				result[toolName] = &contracts.ToolPreference{
-					Enabled:      false,
-					OriginalName: toolName,
+	// Try to get preferences from storage first
+	if s.storage != nil {
+		records, err := s.storage.ListToolPreferences(serverName)
+		if err != nil {
+			s.logger.Warnw("Failed to list tool preferences from storage, using empty preferences",
+				"server", serverName, "error", err)
+		} else {
+			// Convert storage records to ToolPreference map
+			for _, record := range records {
+				result[record.ToolName] = &contracts.ToolPreference{
+					Enabled:           record.Enabled,
+					CustomName:        record.CustomName,
+					CustomDescription: record.CustomDescription,
+					OriginalName:      record.ToolName,
+					LastUsed:          nil, // Will be populated from activity service in the future
+					CallCount:         0,   // Will be populated from activity service in the future
 				}
 			}
-			break
 		}
 	}
 
@@ -1127,13 +1135,14 @@ func (s *ServiceImpl) GetToolPreferences(ctx context.Context, serverName string)
 }
 
 // UpdateToolPreference updates or creates a tool preference for a specific server/tool.
+// Handles both enable/disable state and custom name/description.
 func (s *ServiceImpl) UpdateToolPreference(ctx context.Context, serverName, toolName string, pref *contracts.ToolPreference) error {
 	// Check configuration gates
 	if err := s.checkWriteGates(); err != nil {
 		return err
 	}
 
-	// Get current disabled tools list
+	// Get current disabled tools list from config
 	var disabledTools []string
 	for _, server := range s.config.Servers {
 		if server.Name == serverName {
@@ -1142,7 +1151,7 @@ func (s *ServiceImpl) UpdateToolPreference(ctx context.Context, serverName, tool
 		}
 	}
 
-	// Update based on enabled state
+	// Update disabled tools list based on enabled state
 	if pref.Enabled {
 		// Enable tool - remove from disabled list
 		disabledTools = removeFromSlice(disabledTools, toolName)
@@ -1151,9 +1160,64 @@ func (s *ServiceImpl) UpdateToolPreference(ctx context.Context, serverName, tool
 		disabledTools = addToSlice(disabledTools, toolName)
 	}
 
-	// Update runtime config
+	// Update runtime config for disabled tools
 	if err := s.runtime.UpdateServerDisabledTools(serverName, disabledTools); err != nil {
 		return fmt.Errorf("failed to update disabled tools: %w", err)
+	}
+
+	// Save custom name/description to storage if provided
+	if s.storage != nil && (pref.CustomName != "" || pref.CustomDescription != "") {
+		// Get existing preference or create new one
+		existing, err := s.storage.GetToolPreference(serverName, toolName)
+		var record *storage.ToolPreferenceRecord
+		if err != nil {
+			// Create new record
+			record = &storage.ToolPreferenceRecord{
+				ServerName: serverName,
+				ToolName:   toolName,
+				Enabled:    pref.Enabled,
+				Created:    time.Now(),
+				Updated:    time.Now(),
+			}
+		} else {
+			// Update existing record
+			record = existing
+			record.Updated = time.Now()
+		}
+
+		// Set custom fields
+		record.Enabled = pref.Enabled
+		record.CustomName = pref.CustomName
+		record.CustomDescription = pref.CustomDescription
+
+		// Save to storage
+		if err := s.storage.SaveToolPreference(record); err != nil {
+			s.logger.Warnw("Failed to save tool preference to storage",
+				"server", serverName, "tool", toolName, "error", err)
+			// Continue anyway - config update succeeded
+		}
+	} else if s.storage != nil {
+		// No custom fields, but still save enabled state to storage
+		existing, err := s.storage.GetToolPreference(serverName, toolName)
+		var record *storage.ToolPreferenceRecord
+		if err != nil {
+			record = &storage.ToolPreferenceRecord{
+				ServerName: serverName,
+				ToolName:   toolName,
+				Enabled:    pref.Enabled,
+				Created:    time.Now(),
+				Updated:    time.Now(),
+			}
+		} else {
+			record = existing
+			record.Updated = time.Now()
+			record.Enabled = pref.Enabled
+		}
+
+		if err := s.storage.SaveToolPreference(record); err != nil {
+			s.logger.Warnw("Failed to save tool preference enabled state to storage",
+				"server", serverName, "tool", toolName, "error", err)
+		}
 	}
 
 	// Save configuration to disk
