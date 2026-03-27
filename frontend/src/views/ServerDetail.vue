@@ -1334,6 +1334,24 @@
                       class="badge badge-xs badge-error"
                       >{{ ss.findings_count }}</span
                     >
+                  <div class="form-control">
+                    <label class="label">
+                      <span class="label-text font-medium">Exclude Disabled Tools</span>
+                      <span class="label-text-alt">Hide disabled tools from listings</span>
+                    </label>
+                    <input
+                      type="checkbox"
+                      :checked="server.exclude_disabled_tools"
+                      @change="toggleExcludeDisabledTools"
+                      class="toggle"
+                      :disabled="actionLoading"
+                    />
+                  </div>
+                  <div>
+                    <label class="label">
+                      <span class="label-text font-medium">Tools Count</span>
+                    </label>
+                    <input :value="server.tool_count" readonly class="input input-bordered w-full" />
                   </div>
                 </div>
               </template>
@@ -2254,6 +2272,45 @@ async function toggleEnabled() {
       title: 'Operation Failed',
       message: error instanceof Error ? error.message : 'Unknown error',
     })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function toggleExcludeDisabledTools() {
+  if (!server.value) return
+
+  actionLoading.value = true
+  try {
+    const newValue = !server.value.exclude_disabled_tools
+    const response = await api.patchServerConfig(server.value.name, {
+      exclude_disabled_tools: newValue,
+    })
+
+    if (response.success) {
+      systemStore.addToast({
+        type: 'success',
+        title: 'Setting Updated',
+        message: newValue
+          ? `Disabled tools will be hidden for ${server.value.name}`
+          : `Disabled tools will be shown for ${server.value.name}`,
+      })
+      // Update local server reference
+      await serversStore.fetchServers()
+      server.value = serversStore.servers.find(s => s.name === props.serverName) || null
+    } else {
+      throw new Error(response.error || 'Failed to update setting')
+    }
+  } catch (error) {
+    systemStore.addToast({
+      type: 'error',
+      title: 'Update Failed',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    })
+    // Revert the toggle state on error
+    if (server.value) {
+      server.value.exclude_disabled_tools = !server.value.exclude_disabled_tools
+    }
   } finally {
     actionLoading.value = false
   }

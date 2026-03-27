@@ -60,6 +60,7 @@ type Server struct {
 	// these fields.
 	Diagnostic *Diagnostic `json:"diagnostic,omitempty"`
 	ErrorCode  string      `json:"error_code,omitempty"`
+	ExcludeDisabledTools bool              `json:"exclude_disabled_tools,omitempty"` // If true, hide disabled tools from listings
 }
 
 // Diagnostic is the REST-API representation of a classified server failure.

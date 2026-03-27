@@ -1,95 +1,91 @@
-# Active Context - MCPProxy-Go Custom Tool Names Feature
+# Active Context - MCPProxy-Go Exclude Disabled Tools Feature
 
-**Last Updated:** 2026-03-26
-**Current Focus:** Custom Tool Names and Descriptions Feature - COMPLETE ✅
+**Last Updated:** 2026-03-27
+**Current Focus:** Exclude Disabled Tools Feature - COMPLETE ✅
 
 ## Current State
 
-### ✅ Completed This Session (2026-03-26)
+### ✅ Completed This Session (2026-03-27)
 
-1. **Custom Tool Names and Descriptions Feature** - Full implementation
-   - Backend: Runtime layer applies custom names/descriptions from storage
-   - Management Service: Updated to read/write custom fields to BBolt storage
-   - HTTP API: Already supported custom fields, fixed pre-existing feedbackSubmitter bug
-   - CLI: Added `rename`, `describe`, and `reset` commands
-   - Frontend UI: Added EditToolModal component with edit button on each tool card
-   - Tests: 4/4 unit tests passing
+1. **Exclude Disabled Tools Configuration Switch** - Full implementation
+   - Backend: Config field, API response, runtime filtering, config persistence
+   - Management Service: PatchServerConfig() for updating server config
+   - HTTP API: PATCH /api/v1/servers/{id}/config endpoint
+   - Frontend UI: Toggle in Server Detail Configuration tab
+   - Search: filterDisabledToolsFromSearch() respects config
 
-2. **Windows x64 Release Build Script**
-   - Created `scripts/build-release.bat` for Windows batch builds
-   - Successfully built v0.21.4 release (27.2 MB ZIP)
-   - Verified: `MCPProxy v0.21.4 (personal) windows/amd64`
+2. **Exclude Tools from Disabled Servers** - Automatic filtering
+   - GetServerTools() returns empty list for disabled servers
+   - Search excludes tools from disabled servers
 
-3. **Documentation**
-   - Updated session_summary.md with complete implementation details
-   - Added architecture flow diagrams
-   - Documented CLI commands and HTTP API
+3. **Build & Deployment**
+   - Created scripts/build-release.bat for Windows builds
+   - Created scripts/deploy.ps1 for deployment
+   - Built and deployed v0.21.6 to D:\Development\CodeMode\mcpproxy-go
+
+4. **Verification**
+   - Github server: 41 tools total, 33 disabled → /tools returns 8 enabled ✅
+   - Config persists across restarts ✅
+   - API response includes exclude_disabled_tools field ✅
 
 ### 🎯 Next Session Tasks
 
-**Priority:** High
+**Priority:** Medium
 
-#### Testing and Validation
-1. **End-to-end testing** with running daemon
-   - Test UI: Edit tool name/description in Server Detail page
-   - Test CLI: `mcpproxy tools preferences rename/describe/reset`
-   - Verify custom names appear in tool lists
-   - Verify persistence after daemon restart
+#### UI Testing
+1. **Browser hard refresh** - Ensure frontend cache is cleared (Ctrl+Shift+R)
+2. **Toggle persistence test**:
+   - Toggle "Exclude Disabled Tools" in UI
+   - Refresh page - toggle should stay in same state
+   - Restart server - toggle should persist
 
-2. **AI Agent Integration Testing**
-   - Verify AI agents receive customized tool names/descriptions
-   - Test with GitHub Copilot MCP server
-   - Verify tool calls use correct original names (not custom names)
+#### Documentation
+1. Add user guide for exclude_disabled_tools in `docs/features/`
+2. Update CLI documentation with PATCH endpoint
+3. Add API documentation for config patching
 
-3. **Edge Cases**
-   - Test with empty custom name/description
-   - Test reset to defaults
-   - Test with special characters in custom names
-
-#### Documentation Updates
-1. Add user guide for custom tool names in `docs/features/`
-2. Update CLI documentation with new commands
-3. Add API documentation for custom fields
+#### Enhancement Ideas
+1. Bulk toggle for all servers
+2. Default value for new servers
+3. Audit log for config changes
 
 ## Active State
 
 ### Running Processes
-- **MCPProxy Tray:** Not currently running (stopped for build)
-- **Core Server:** Not currently running
-- **Build Status:** v0.21.4 release built successfully
+- **MCPProxy Tray:** Running on port 3303
+- **Core Server:** Running (PID varies)
+- **Build Status:** v0.21.6 deployed
 
 ### Database State
 - **Path:** `C:\Users\eserk\.mcpproxy\config.db`
 - **Status:** Active, tool_preferences bucket ready
-- **Schema:** ToolPreferenceRecord with CustomName and CustomDescription fields
+- **Config:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
 
-### Config State
-- **Path:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
-- **Format:** UTF-8 (no BOM)
-- **Servers:** 20 servers configured
+### Servers with exclude_disabled_tools: true
+- ChromeDev (disabled server)
+- Avalonia (disabled server)
+- Github (enabled, 41 tools, 33 disabled)
 
 ### Build Artifacts
-- **Location:** `releases/v0.21.4/` and `releases/mcpproxy-0.21.4-windows-amd64.zip`
-- **Status:** Built and verified
+- **Location:** `releases/v0.21.6/` and `releases/mcpproxy-0.21.6-windows-amd64.zip`
+- **Deployed:** `D:\Development\CodeMode\mcpproxy-go\`
 
 ## Open Tasks
 
 ### High Priority (Testing)
-- [ ] End-to-end UI testing with daemon
-- [ ] CLI command testing
-- [ ] AI agent integration testing
-- [ ] Persistence testing (daemon restart)
+- [ ] UI toggle persistence after page refresh
+- [ ] Config file verification after UI toggle
+- [ ] Search endpoint filtering verification
 
 ### Medium Priority (Documentation)
-- [ ] User guide for custom tool names
+- [ ] User guide for exclude_disabled_tools
 - [ ] API documentation update
 - [ ] CLI documentation update
 
 ### Low Priority (Enhancements)
-- [ ] Tool preference export/import
-- [ ] Bulk operations
-- [ ] Audit log for preference changes
-- [ ] Localization support
+- [ ] Bulk toggle for all servers
+- [ ] Default value for new servers
+- [ ] Audit log for config changes
 
 ## Scratchpad
 
@@ -97,48 +93,42 @@
 
 ```bash
 # Start daemon for testing
-cd E:\Projects\Go\mcpproxy-go
-.\mcpproxy.exe serve
+cd D:\Development\CodeMode\mcpproxy-go
+.\mcpproxy.exe serve --listen 127.0.0.1:3303
 
-# Test CLI commands
-.\mcpproxy.exe tools preferences list -s terminator
-.\mcpproxy.exe tools preferences rename terminator old_tool new_tool_name
-.\mcpproxy.exe tools preferences describe terminator tool "Custom description"
-.\mcpproxy.exe tools preferences reset terminator tool
+# Test API endpoints
+curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:3303/api/v1/servers/Github/tools
+curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:3303/api/v1/servers/Github/tools/all
 
-# Test UI
-# Navigate to http://127.0.0.1:8080/ui/
-# Select server → Tools tab → Click edit button (pencil icon)
+# Test PATCH endpoint
+curl -X PATCH -H "X-API-Key: YOUR_API_KEY" -H "Content-Type: application/json" \
+  -d '{"exclude_disabled_tools": true}' \
+  http://127.0.0.1:3303/api/v1/servers/Github/config
 ```
 
 ### Code Snippets
 
 ```go
-// Runtime applies custom names/descriptions
+// Runtime applies exclude_disabled_tools config
 func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, error) {
-    // Get tool preferences from storage
-    toolPrefs := r.getToolPreferencesFromStorage(serverName)
+    // If server is disabled, return empty tools list
+    if !serverStatus.Enabled {
+        return []map[string]interface{}{}, nil
+    }
     
-    for _, tool := range serverStatus.Tools {
-        // Apply custom name and description from preferences
-        name := tool.Name
-        description := tool.Description
-        if pref, ok := toolPrefs[tool.Name]; ok {
-            if pref.CustomName != "" {
-                name = pref.CustomName
-            }
-            if pref.CustomDescription != "" {
-                description = pref.CustomDescription
-            }
-        }
-        // ...
+    // Check if ExcludeDisabledTools is enabled in config
+    excludeDisabled := r.isExcludeDisabledToolsEnabled(serverName)
+    
+    // Skip disabled tools if excludeDisabled is true
+    if excludeDisabled && disabledTools[tool.Name] {
+        continue
     }
 }
 ```
 
 ### Known Issues
 
-None currently. All builds passing, tests passing.
+None currently. All builds passing, tests passing, feature verified working.
 
 ## Related Documentation
 
@@ -146,48 +136,8 @@ None currently. All builds passing, tests passing.
 - Lessons Learned: `docs/lessons-learned.md`
 - Architecture: `docs/architecture.md`
 - CLI Commands: `docs/cli-management-commands.md`
-- Tool Preferences: `internal/storage/models.go`
-  callCount?: number;
-}
-
-// API Request/Response
-interface ListToolsResponse {
-  server: string;
-  tools: Array<{
-    name: string;
-    description: string;
-    preference?: ToolPreference;
-    enabled: boolean;
-    displayName: string;
-  }>;
-}
-
-interface RenameToolRequest {
-  newName: string;
-  newDescription?: string;
-}
-```
-
-### Implementation Considerations
-1. **Tool Filtering:** Should happen at the MCP protocol layer to prevent AI from seeing disabled tools
-2. **Name Persistence:** Store in database, not config (config is for server-level, DB is for tool-level)
-3. **Backwards Compatibility:** Tools without preferences should use MCP server defaults
-4. **Performance:** Cache tool preferences in memory, reload on changes
-
-### Test Scenarios
-- Disable a tool → AI shouldn't see it in tool list
-- Rename a tool → AI sees new name, MCP server receives original name
-- Bulk disable → Only specified tools affected
-- Server restart → Preferences persist
-
-## Next Session Resume Command
-
-```bash
-cd E:\Projects\Go\mcpproxy-go
-# Start implementing tool management backend
-# 1. Review this active_context.md
-# 2. Create database schema for tool_preferences
-# 3. Implement management service methods
-# 4. Add HTTP API endpoints
-# 5. Add CLI commands
-```
+- Config: `internal/config/config.go`
+- Runtime: `internal/runtime/runtime.go`, `internal/runtime/lifecycle.go`
+- Management: `internal/management/service.go`
+- HTTP API: `internal/httpapi/server.go`
+- Frontend: `frontend/src/views/ServerDetail.vue`, `frontend/src/types/api.ts`

@@ -1,19 +1,19 @@
-# Session Summary - 2026-03-26
+# Session Summary - 2026-03-27
 
 ## Session Overview
-**Duration:** Single session  
-**Status:** Completed  
-**Date:** 2026-03-26
+**Duration:** Single session
+**Status:** Completed
+**Date:** 2026-03-27
 
 ---
 
 ## Work Completed
 
-### 1. Custom Tool Names and Descriptions Feature ✅
+### 1. Exclude Disabled Tools Feature ✅
 
-**Problem:** Users couldn't override MCP server tool names and descriptions to provide better AI context or localization.
+**Problem:** Users couldn't configure servers to automatically exclude disabled tools from API responses and search results.
 
-**Solution:** Implemented full-stack feature to override tool names and descriptions via Web UI, CLI, and HTTP API.
+**Solution:** Implemented configuration-based switch (`exclude_disabled_tools`) that when enabled, completely excludes disabled tools from tool listing endpoints.
 
 #### Backend Implementation
 
@@ -21,33 +21,66 @@
 
 | Layer | File | Changes |
 |-------|------|---------|
-| Runtime | `internal/runtime/runtime.go` | Modified `GetServerTools()` and `GetAllServerTools()` to apply custom names/descriptions from preferences; Added `getToolPreferencesFromStorage()` helper |
-| Management | `internal/management/service.go` | Updated `GetToolPreferences()` to read from BBolt storage; Updated `UpdateToolPreference()` to save custom fields |
-| HTTP API | `internal/httpapi/server.go` | Fixed pre-existing bug: added `feedbackSubmitter` field and `SetFeedbackSubmitter()` method |
-| CLI | `cmd/mcpproxy/tools_cmd.go` | Added `rename`, `describe`, and `reset` subcommands |
-| Storage | Already supported `ToolPreferenceRecord` with `CustomName` and `CustomDescription` fields |
+| Config | `internal/config/config.go` | Added `ExcludeDisabledTools bool` field to `ServerConfig` struct |
+| Contracts | `internal/contracts/types.go` | Added `ExcludeDisabledTools bool` field to `Server` struct for API response |
+| Runtime | `internal/runtime/runtime.go` | Updated `GetServerTools()` to check `ExcludeDisabledTools` config; Added `isExcludeDisabledToolsEnabled()` helper; Updated `GetAllServers()` to include field in server map |
+| Runtime | `internal/runtime/lifecycle.go` | Updated `SaveConfiguration()` to preserve `ExcludeDisabledTools` when merging config from storage |
+| Management | `internal/management/service.go` | Added `PatchServerConfig()` method to update server config fields; Updated `ListServers()` to extract `exclude_disabled_tools` field |
+| HTTP API | `internal/httpapi/server.go` | Added `PATCH /api/v1/servers/{id}/config` endpoint; Added `handlePatchServerConfig()` handler; Updated `filterDisabledToolsFromSearch()` to respect config and server enabled state |
 
-**Storage Schema:**
-```go
-type ToolPreferenceRecord struct {
-    ServerName        string    `json:"server_name"`
-    ToolName          string    `json:"tool_name"`
-    Enabled           bool      `json:"enabled"`
-    CustomName        string    `json:"custom_name,omitempty"`
-    CustomDescription string    `json:"custom_description,omitempty"`
-    Created           time.Time `json:"created"`
-    Updated           time.Time `json:"updated"`
+**Frontend Implementation:**
+
+| File | Changes |
+|------|---------|
+| `frontend/src/types/api.ts` | Added `exclude_disabled_tools?: boolean` to Server interface |
+| `frontend/src/services/api.ts` | Added `patchServerConfig()` method for PATCH requests |
+| `frontend/src/views/ServerDetail.vue` | Added toggle checkbox in Configuration tab; Added `toggleExcludeDisabledTools()` function |
+
+**API Endpoints:**
+- `GET /api/v1/servers/{id}/tools` - Returns only enabled tools when `exclude_disabled_tools: true`
+- `GET /api/v1/servers/{id}/tools/all` - Returns ALL tools (for admin)
+- `PATCH /api/v1/servers/{id}/config` - Update server config fields
+- `GET /api/v1/index/search?exclude_disabled=true` - Search excludes disabled tools
+
+**Configuration Example:**
+```json
+{
+  "name": "Github",
+  "enabled": true,
+  "disabled_tools": ["delete_file", "create_pull_request"],
+  "exclude_disabled_tools": true
 }
 ```
 
-#### Frontend UI Implementation
+**Verification Results:**
+- Github server: 41 total tools, 33 disabled → `/tools` returns 8 enabled tools ✅
+- Disabled tools correctly excluded from API responses ✅
+- Config persists across server restarts ✅
 
-**Files Created/Modified:**
+### 2. Exclude Tools from Disabled Servers ✅
 
-| File | Type | Changes |
-|------|------|---------|
-| `frontend/src/components/EditToolModal.vue` | New | Modal dialog for editing tool preferences |
-| `frontend/src/views/ServerDetail.vue` | Modified | Added edit button to tool cards, integrated modal |
+**Feature:** When a server is disabled (`enabled: false`), all its tools are automatically excluded from:
+- `/api/v1/servers/{id}/tools` endpoint (returns empty list)
+- `/api/v1/index/search` search results
+
+**Files Modified:**
+- `internal/runtime/runtime.go` - `GetServerTools()` returns empty list if server disabled
+- `internal/httpapi/server.go` - `filterDisabledToolsFromSearch()` excludes tools from disabled servers
+
+### 3. Build & Deployment Infrastructure ✅
+
+**Files Created:**
+- `scripts/build-release.bat` - Windows x64 release build script
+- `scripts/deploy.ps1` - PowerShell deployment script
+
+**Releases Built:**
+- v0.21.4 - Initial build with feature
+- v0.21.5 - Fixed API response field
+- v0.21.6 - Fixed config persistence bug
+
+**Deployment Target:** `D:\Development\CodeMode\mcpproxy-go`
+
+---
 | `frontend/src/services/api.ts` | Modified | Added `updateToolPreferenceFull()` method |
 
 **UI Features:**

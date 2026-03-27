@@ -1827,6 +1827,11 @@ func (r *Runtime) GetAllServers() ([]map[string]interface{}, error) {
 			healthConfig.ExpiryWarningDuration = time.Duration(r.cfg.OAuthExpiryWarningHours * float64(time.Hour))
 		}
 
+		var tokenExpiresAtPtr *time.Time
+		if !tokenExpiresAt.IsZero() {
+			tokenExpiresAtPtr = &tokenExpiresAt
+		}
+
 		healthInput := health.HealthCalculatorInput{
 			Name:            serverStatus.Name,
 			Enabled:         serverStatus.Enabled,
@@ -1836,36 +1841,19 @@ func (r *Runtime) GetAllServers() ([]map[string]interface{}, error) {
 			LastError:       serverStatus.LastError,
 			OAuthRequired:   oauthConfig != nil,
 			OAuthStatus:     oauthStatus,
+			TokenExpiresAt:  tokenExpiresAtPtr,
 			HasRefreshToken: hasRefreshToken,
-			UserLoggedOut:   userLoggedOut,
 			ToolCount:       serverStatus.ToolCount,
-			MissingSecret:   health.ExtractMissingSecret(serverStatus.LastError),
-			OAuthConfigErr:  health.ExtractOAuthConfigError(serverStatus.LastError),
-		}
-		if !tokenExpiresAt.IsZero() {
-			healthInput.TokenExpiresAt = &tokenExpiresAt
-		}
-
-		// T032: Wire refresh state into health calculation (Spec 023)
-		if r.refreshManager != nil {
-			if refreshState := r.refreshManager.GetRefreshState(serverStatus.Name); refreshState != nil {
-				healthInput.RefreshState = health.RefreshState(refreshState.State)
-				healthInput.RefreshRetryCount = refreshState.RetryCount
-				healthInput.RefreshLastError = refreshState.LastError
-				healthInput.RefreshNextAttempt = refreshState.NextAttempt
-			}
+			UserLoggedOut:   userLoggedOut,
 		}
 
 		healthStatus := health.CalculateHealth(healthInput, healthConfig)
 		serverMap["health"] = healthStatus
 
-		// M-005: Log health status for debugging
-		r.logger.Debug("Server health calculated",
-			zap.String("server", serverStatus.Name),
-			zap.String("level", healthStatus.Level),
-			zap.String("admin_state", healthStatus.AdminState),
-			zap.String("summary", healthStatus.Summary),
-		)
+		// Add exclude_disabled_tools config from server config
+		if serverStatus.Config != nil {
+			serverMap["exclude_disabled_tools"] = serverStatus.Config.ExcludeDisabledTools
+		}
 
 		result = append(result, serverMap)
 	}
@@ -1937,6 +1925,8 @@ func (r *Runtime) getAllServersLegacy() ([]map[string]interface{}, error) {
 // Returns all tools for a specific upstream server from StateView cache (lock-free read).
 // Filters out disabled tools based on ServerConfig.DisabledTools.
 // Applies custom tool names and descriptions from preferences if available.
+// Respects the ExcludeDisabledTools config option - if true, disabled tools are always excluded.
+// Returns empty list if the server itself is disabled.
 func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, error) {
 	r.logger.Debug("Runtime.GetServerTools called", zap.String("server", serverName))
 
@@ -1955,16 +1945,25 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 		return nil, fmt.Errorf("server not found: %s", serverName)
 	}
 
+	// If server is disabled, return empty tools list
+	if !serverStatus.Enabled {
+		r.logger.Debug("Server is disabled, returning empty tools list", zap.String("server", serverName))
+		return []map[string]interface{}{}, nil
+	}
+
 	// Get disabled tools from server config
 	disabledTools := r.getDisabledToolsFromConfig(serverName)
+
+	// Check if ExcludeDisabledTools is enabled in config
+	excludeDisabled := r.isExcludeDisabledToolsEnabled(serverName)
 
 	// Get tool preferences from storage (for custom names/descriptions)
 	toolPrefs := r.getToolPreferencesFromStorage(serverName)
 
 	tools := make([]map[string]interface{}, 0, len(serverStatus.Tools))
 	for _, tool := range serverStatus.Tools {
-		// Skip disabled tools
-		if disabledTools[tool.Name] {
+		// Skip disabled tools if excludeDisabled is true
+		if excludeDisabled && disabledTools[tool.Name] {
 			continue
 		}
 
@@ -1996,6 +1995,24 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 	}
 
 	return tools, nil
+}
+
+// isExcludeDisabledToolsEnabled checks if ExcludeDisabledTools is enabled for a server
+func (r *Runtime) isExcludeDisabledToolsEnabled(serverName string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.cfg == nil {
+		return false
+	}
+
+	for _, server := range r.cfg.Servers {
+		if server.Name == serverName {
+			return server.ExcludeDisabledTools
+		}
+	}
+
+	return false
 }
 
 // GetAllServerTools returns ALL tools for a specific server including disabled ones.

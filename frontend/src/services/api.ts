@@ -267,6 +267,13 @@ class APIService {
     })
   }
 
+  async patchServerConfig(serverName: string, config: Partial<Server>): Promise<APIResponse> {
+    return this.request(`/api/v1/servers/${encodeURIComponent(serverName)}/config`, {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    })
+  }
+
   async discoverServerTools(serverName: string): Promise<APIResponse> {
     return this.request(`/api/v1/servers/${encodeURIComponent(serverName)}/discover-tools`, {
       method: 'POST',

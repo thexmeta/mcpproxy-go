@@ -530,6 +530,7 @@ func (s *Server) setupRoutes() {
 			// Spec 044: per-server diagnostics with stable error_code.
 			r.Get("/diagnostics", s.handleGetServerDiagnostics)
 			r.Get("/tool-calls", s.handleGetServerToolCalls)
+			r.Patch("/config", s.handlePatchServerConfig)
 
 			// Tool preferences (enable/disable, custom names)
 			r.Get("/tools/preferences", s.handleGetToolPreferences)
@@ -1597,6 +1598,64 @@ func (s *Server) handleDisableServer(w http.ResponseWriter, r *http.Request) {
 	s.writeSuccess(w, response)
 }
 
+// handlePatchServerConfig godoc
+// @Summary Update server configuration
+// @Description Patch specific fields of a server's configuration (e.g., exclude_disabled_tools)
+// @Tags servers
+// @Produce json
+// @Accept json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Param id path string true "Server ID or name"
+// @Param request body object true "Configuration fields to update"
+// @Success 200 {object} contracts.APIResponse "Configuration updated successfully"
+// @Failure 400 {object} contracts.ErrorResponse "Bad request (invalid JSON or missing fields)"
+// @Failure 404 {object} contracts.ErrorResponse "Server not found"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/servers/{id}/config [patch]
+func (s *Server) handlePatchServerConfig(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if serverID == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
+		return
+	}
+
+	// Parse request body
+	var patchConfig map[string]interface{}
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&patchConfig); err != nil {
+		s.writeError(w, r, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	// Get management service
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		PatchServerConfig(ctx context.Context, name string, patch map[string]interface{}) error
+	})
+	if !ok {
+		s.logger.Error("Management service not available or missing PatchServerConfig method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	// Apply the patch
+	if err := mgmtSvc.PatchServerConfig(r.Context(), serverID, patchConfig); err != nil {
+		s.logger.Error("Failed to patch server config", "server", serverID, "error", err)
+		if strings.Contains(err.Error(), "not found") {
+			s.writeError(w, r, http.StatusNotFound, fmt.Sprintf("Server not found: %s", serverID))
+			return
+		}
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update config: %v", err))
+		return
+	}
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Configuration updated",
+	}
+	s.writeSuccess(w, response)
+}
+
 // handleForceReconnectServers godoc
 // @Summary Reconnect all servers
 // @Description Force reconnection to all upstream MCP servers
@@ -2143,7 +2202,7 @@ func (s *Server) handleUnquarantineServer(w http.ResponseWriter, r *http.Request
 
 // handleGetServerTools godoc
 // @Summary Get tools for a server
-// @Description Retrieve all available tools for a specific upstream MCP server
+// @Description Retrieve all available tools for a specific upstream MCP server. Respects the exclude_disabled_tools config option - if enabled for a server, disabled tools are excluded from the response.
 // @Tags servers
 // @Produce json
 // @Security ApiKeyAuth
@@ -2161,7 +2220,7 @@ func (s *Server) handleGetServerTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// NEW: Call management service instead of controller (T016)
+	// Call management service (respects ExcludeDisabledTools config)
 	mgmtSvc, ok := s.controller.GetManagementService().(interface {
 		GetServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
 	})
@@ -2240,7 +2299,7 @@ func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Call management service
+	// Call management service to get all tools (including disabled)
 	mgmtSvc, ok := s.controller.GetManagementService().(interface {
 		GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
 	})
@@ -2321,7 +2380,7 @@ func (s *Server) handleGetServerLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleSearchTools godoc
 // @Summary Search for tools
-// @Description Search across all upstream MCP server tools using BM25 keyword search
+// @Description Search across all upstream MCP server tools using BM25 keyword search. Respects the exclude_disabled_tools config option for filtering.
 // @Tags tools
 // @Produce json
 // @Security ApiKeyAuth
@@ -2354,6 +2413,9 @@ func (s *Server) handleSearchTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter out disabled tools based on config
+	results = s.filterDisabledToolsFromSearch(results)
+
 	// Convert to typed search results
 	typedResults := contracts.ConvertGenericSearchResultsToTyped(results)
 
@@ -2365,6 +2427,97 @@ func (s *Server) handleSearchTools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeSuccess(w, response)
+}
+
+// filterDisabledToolsFromSearch removes disabled tools from search results
+// based on the exclude_disabled_tools config option and server enabled state.
+func (s *Server) filterDisabledToolsFromSearch(results []map[string]interface{}) []map[string]interface{} {
+	// Get current config to check exclude_disabled_tools setting
+	cfg := s.controller.GetCurrentConfig()
+	if cfg == nil {
+		return results // Can't filter without config
+	}
+
+	// Build a map of which servers have exclude_disabled_tools enabled
+	excludeDisabledMap := make(map[string]bool)
+	disabledToolsMap := make(map[string]map[string]bool)
+	enabledServersMap := make(map[string]bool)
+	
+	// Parse config as map to access servers
+	if configMap, ok := cfg.(map[string]interface{}); ok {
+		if servers, ok := configMap["mcpServers"].([]interface{}); ok {
+			for _, srv := range servers {
+				if serverMap, ok := srv.(map[string]interface{}); ok {
+					if name, ok := serverMap["name"].(string); ok {
+						// Track enabled servers
+						if enabled, ok := serverMap["enabled"].(bool); ok {
+							enabledServersMap[name] = enabled
+						}
+						// Check if exclude_disabled_tools is enabled
+						if excludeDisabled, ok := serverMap["exclude_disabled_tools"].(bool); ok && excludeDisabled {
+							excludeDisabledMap[name] = true
+						}
+						// Build disabled tools map for servers with exclude_disabled_tools enabled
+						if disabledList, ok := serverMap["disabled_tools"].([]interface{}); ok {
+							if _, exists := disabledToolsMap[name]; !exists {
+								disabledToolsMap[name] = make(map[string]bool)
+							}
+							for _, tool := range disabledList {
+								if toolName, ok := tool.(string); ok {
+									disabledToolsMap[name][toolName] = true
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Filter results - exclude tools from disabled servers and disabled tools
+	filtered := make([]map[string]interface{}, 0, len(results))
+	for _, result := range results {
+		// Extract tool info from nested structure
+		toolData, ok := result["tool"].(map[string]interface{})
+		if !ok {
+			filtered = append(filtered, result)
+			continue
+		}
+
+		serverName, ok := toolData["server_name"].(string)
+		if !ok {
+			filtered = append(filtered, result)
+			continue
+		}
+
+		// Skip tools from disabled servers
+		if enabled, exists := enabledServersMap[serverName]; exists && !enabled {
+			continue // Skip tool from disabled server
+		}
+
+		// Skip filtering if server doesn't have exclude_disabled_tools enabled
+		if !excludeDisabledMap[serverName] {
+			filtered = append(filtered, result)
+			continue
+		}
+
+		toolName, ok := toolData["name"].(string)
+		if !ok {
+			filtered = append(filtered, result)
+			continue
+		}
+
+		// Check if tool is disabled
+		if serverDisabled, exists := disabledToolsMap[serverName]; exists {
+			if serverDisabled[toolName] {
+				continue // Skip disabled tool
+			}
+		}
+
+		filtered = append(filtered, result)
+	}
+
+	return filtered
 }
 
 func (s *Server) handleSSEEvents(w http.ResponseWriter, r *http.Request) {

@@ -93,6 +93,7 @@ type Service interface {
 	// This is a read-only operation that completes in <10ms (in-memory cache read).
 	// Returns empty array if server has no tools.
 	// Returns error if server name is empty, server not found, or server not connected.
+	// Respects the ExcludeDisabledTools config option - if true, disabled tools are always excluded.
 	GetServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
 
 	// GetAllServerTools retrieves all tools including disabled ones.
@@ -100,6 +101,10 @@ type Service interface {
 	// with an "enabled" field so clients can see and re-enable disabled tools.
 	// Delegates to runtime's GetAllServerTools().
 	GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
+
+	// PatchServerConfig updates specific fields of a server's configuration.
+	// Supports updating exclude_disabled_tools and other server-level settings.
+	PatchServerConfig(ctx context.Context, name string, patch map[string]interface{}) error
 
 	// TriggerOAuthLogin initiates an OAuth 2.x authentication flow for a specific server.
 	// Delegates to upstream manager's StartManualOAuth() which launches browser-based flow.
@@ -501,6 +506,9 @@ func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contra
 				}
 			}
 			srv.Diagnostic = d
+		// Extract exclude_disabled_tools config
+		if excludeDisabledTools, ok := srvRaw["exclude_disabled_tools"].(bool); ok {
+			srv.ExcludeDisabledTools = excludeDisabledTools
 		}
 
 		servers = append(servers, srv)
@@ -920,6 +928,58 @@ func (s *ServiceImpl) GetAllServerTools(ctx context.Context, name string) ([]map
 	}
 
 	return tools, nil
+}
+
+// PatchServerConfig updates specific fields of a server's configuration.
+// Supports updating exclude_disabled_tools and other server-level settings.
+func (s *ServiceImpl) PatchServerConfig(ctx context.Context, name string, patch map[string]interface{}) error {
+	// Validate input
+	if name == "" {
+		return fmt.Errorf("server name required")
+	}
+
+	// Check configuration gates
+	if err := s.checkWriteGates(); err != nil {
+		return err
+	}
+
+	// Get current config
+	cfg := s.config
+	if cfg == nil {
+		return fmt.Errorf("configuration not available")
+	}
+
+	// Find and update the server
+	found := false
+	for i, server := range cfg.Servers {
+		if server.Name == name {
+			found = true
+
+			// Apply patch fields
+			if excludeDisabledTools, ok := patch["exclude_disabled_tools"].(bool); ok {
+				cfg.Servers[i].ExcludeDisabledTools = excludeDisabledTools
+			}
+
+			// Add more fields here as needed in the future
+
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("server not found: %s", name)
+	}
+
+	// Save the configuration
+	if err := s.runtime.SaveConfiguration(); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	s.logger.Info("Server configuration patched",
+		zap.String("server", name),
+		zap.Any("patch", patch))
+
+	return nil
 }
 
 // TriggerOAuthLogin initiates OAuth authentication flow for a server (T014).
