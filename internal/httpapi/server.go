@@ -142,7 +142,7 @@ type Server struct {
 	tokenStore         TokenStore         // Agent token CRUD (T022)
 	dataDir            string             // Data directory for HMAC key (T022)
 	feedbackSubmitter  FeedbackSubmitter  // Feedback submission (Spec 036)
-	connectService     *connect.Service   // Client connect/disconnect operations
+	connectService     *connect.Service   // Connect service for client management
 	securityController SecurityController // Security scanner operations (Spec 039)
 
 	// telemetryRegistry is the Tier 2 counter aggregator (Spec 042). May be
@@ -207,9 +207,12 @@ func (s *Server) SetFeedbackSubmitter(submitter FeedbackSubmitter) {
 	s.feedbackSubmitter = submitter
 }
 
-// SetConnectService configures the client connect/disconnect service.
-func (s *Server) SetConnectService(svc *connect.Service) {
-	s.connectService = svc
+// SetConnectService configures connect service for client management.
+// This must be called after NewServer and before serving requests
+// to enable the /api/v1/connect endpoints.
+func (s *Server) SetConnectService(service *connect.Service) {
+	s.connectService = service
+}
 }
 
 // Router returns the underlying chi.Mux for external route registration.

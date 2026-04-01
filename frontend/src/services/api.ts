@@ -552,6 +552,37 @@ class APIService {
     return this.request<ServerTokenMetrics>('/api/v1/stats/tokens')
   }
 
+  // Docker status endpoint
+  async getDockerStatus(): Promise<APIResponse<{
+    docker_available: boolean
+    recovery_mode: boolean
+    failure_count: number
+    attempts_since_up: number
+    last_attempt: string
+    last_error: string
+    last_successful_at: string
+  }>> {
+    return this.request('/api/v1/docker/status')
+  }
+
+  // Connect endpoints
+  async getConnectStatus(): Promise<APIResponse<ConnectStatusResponse>> {
+    return this.request<ConnectStatusResponse>('/api/v1/connect')
+  }
+
+  async connectClient(clientId: string, serverName = 'mcpproxy', force = false): Promise<APIResponse<ConnectResult>> {
+    return this.request<ConnectResult>(`/api/v1/connect/${encodeURIComponent(clientId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ server_name: serverName, force })
+    })
+  }
+
+  async disconnectClient(clientId: string): Promise<APIResponse<ConnectResult>> {
+    return this.request<ConnectResult>(`/api/v1/connect/${encodeURIComponent(clientId)}`, {
+      method: 'DELETE',
+    })
+  }
+
   // Tool Call via REST API
   async callTool(toolName: string, args: Record<string, any>): Promise<APIResponse<any>> {
     return this.request<any>('/api/v1/tools/call', {
