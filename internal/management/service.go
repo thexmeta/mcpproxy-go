@@ -506,6 +506,7 @@ func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contra
 				}
 			}
 			srv.Diagnostic = d
+		}
 		// Extract exclude_disabled_tools config
 		if excludeDisabledTools, ok := srvRaw["exclude_disabled_tools"].(bool); ok {
 			srv.ExcludeDisabledTools = excludeDisabledTools

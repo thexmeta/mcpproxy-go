@@ -4189,6 +4189,8 @@ func toolApprovalPriority(status string) int {
 	default:
 		return 2
 	}
+}
+
 // handleGetToolPreferences godoc
 // @Summary Get tool preferences for a server
 // @Description Retrieve all tool preferences (enable/disable, custom names) for a specific server
