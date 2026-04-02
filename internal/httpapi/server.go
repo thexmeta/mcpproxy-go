@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -983,17 +984,39 @@ func restartProcess() error {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	// Start a new process with the same arguments
-	cmd := exec.Command(exe)
+	// Get command line arguments (excluding the executable itself)
+	args := os.Args[1:]
+
+	// Create the command with proper process attributes for Windows
+	cmd := exec.Command(exe, args...)
 	cmd.Dir = cwd
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
+
+	// On Windows, detach the process so it survives after parent exits
+	// This is done by setting the process to run in a new process group
+	if sysProcAttr := cmd.SysProcAttr; sysProcAttr != nil {
+		sysProcAttr.HideWindow = false
+	} else {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    false,
+			CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		}
+	}
+
+	// Redirect output to avoid inheriting handles that might cause issues
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
 
 	// Start the new process
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start new process: %w", err)
 	}
+
+	// Release the process from this parent
+	cmd.Process.Release()
+
+	// Give the new process time to start
+	time.Sleep(2 * time.Second)
 
 	// Exit the current process
 	os.Exit(0)
