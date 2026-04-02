@@ -215,6 +215,12 @@ class APIService {
     return this.request<{ edition: string; running: boolean; routing_mode: string }>('/api/v1/status')
   }
 
+  async restartProxy(): Promise<APIResponse> {
+    return this.request('/api/v1/restart', {
+      method: 'POST',
+    })
+  }
+
   // Routing mode endpoint
   async getRouting(): Promise<APIResponse<RoutingInfo>> {
     return this.request<RoutingInfo>('/api/v1/routing')

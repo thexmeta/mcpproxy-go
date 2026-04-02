@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -501,6 +503,9 @@ func (s *Server) setupRoutes() {
 		// Info endpoint (server version, web UI URL, etc.)
 		r.Get("/info", s.handleGetInfo)
 
+		// Restart proxy endpoint (self-restart)
+		r.Post("/restart", s.handleRestartProxy)
+
 		// Routing mode endpoint
 		r.Get("/routing", s.handleGetRouting)
 
@@ -931,6 +936,68 @@ func (s *Server) handleGetInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeSuccess(w, response)
+}
+
+// handleRestartProxy godoc
+// @Summary Restart the MCPProxy service
+// @Description Restart the entire MCPProxy service (not just individual servers). The service will restart with the same configuration.
+// @Tags status
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Success 200 {object} contracts.SuccessResponse "Restart initiated successfully"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/restart [post]
+func (s *Server) handleRestartProxy(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("MCPProxy restart requested via API")
+
+	// Send success response immediately
+	s.writeSuccess(w, map[string]interface{}{
+		"message": "MCPProxy is restarting...",
+	})
+
+	// Trigger async restart in a goroutine
+	go func() {
+		// Give the HTTP response time to be sent
+		time.Sleep(500 * time.Millisecond)
+
+		// Use os/exec to restart the process
+		// This will work when running as a tray application or daemon
+		if err := restartProcess(); err != nil {
+			s.logger.Error("Failed to restart MCPProxy", "error", err)
+		}
+	}()
+}
+
+// restartProcess attempts to restart the current process
+func restartProcess() error {
+	// Get the current executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Start a new process with the same arguments
+	cmd := exec.Command(exe)
+	cmd.Dir = cwd
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	// Start the new process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start new process: %w", err)
+	}
+
+	// Exit the current process
+	os.Exit(0)
+	return nil
 }
 
 // buildWebUIURL constructs the web UI URL based on listen address and request

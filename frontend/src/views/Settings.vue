@@ -6,6 +6,20 @@
         <h1 class="text-3xl font-bold">Configuration</h1>
         <p class="text-base-content/70 mt-1">Edit your MCPProxy configuration directly. Changes require restart for some settings.</p>
       </div>
+      <div class="flex items-center space-x-2">
+        <button
+          @click="restartProxy"
+          :disabled="restartingProxy"
+          class="btn btn-warning"
+          title="Restart the entire MCPProxy service"
+        >
+          <span v-if="restartingProxy" class="loading loading-spinner loading-sm"></span>
+          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Restart Proxy
+        </button>
+      </div>
     </div>
 
     <!-- Configuration Editor -->
@@ -127,6 +141,7 @@ const configJson = ref('')
 const loadingConfig = ref(false)
 const validatingConfig = ref(false)
 const applyingConfig = ref(false)
+const restartingProxy = ref(false)
 const configStatus = ref<{ valid: boolean } | null>(null)
 const configErrors = ref<Array<{ field: string; message: string }>>([])
 const applyResult = ref<{
@@ -250,6 +265,44 @@ async function applyConfig() {
   } finally {
     applyingConfig.value = false
   }
+}
+
+async function restartProxy() {
+  restartingProxy.value = true
+
+  try {
+    const confirmed = await confirmRestart()
+    if (!confirmed) {
+      restartingProxy.value = false
+      return
+    }
+
+    const response = await api.restartProxy()
+    if (response.success) {
+      // Show success message
+      alert('MCPProxy is restarting...\n\nThe page will reload automatically.')
+      
+      // Wait a moment then reload the page
+      setTimeout(() => {
+        window.location.reload()
+      }, 2000)
+    } else {
+      alert(`Failed to restart: ${response.error || 'Unknown error'}`)
+    }
+  } catch (error: any) {
+    console.error('Failed to restart proxy:', error)
+    alert(`Failed to restart: ${error.message || 'Unknown error'}`)
+  } finally {
+    restartingProxy.value = false
+  }
+}
+
+async function confirmRestart(): Promise<boolean> {
+  return confirm(
+    'Are you sure you want to restart MCPProxy?\n\n' +
+    'This will restart the entire service. The page will reload automatically after restart.\n\n' +
+    'Click OK to continue.'
+  )
 }
 
 // Settings hints
