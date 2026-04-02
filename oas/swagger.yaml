@@ -414,12 +414,21 @@ components:
           type: string
         created:
           type: string
+        disabled_tools:
+          description: Tools disabled for this server
+          items:
+            type: string
+          type: array
+          uniqueItems: false
         enabled:
           type: boolean
         env:
           additionalProperties:
             type: string
           type: object
+        exclude_disabled_tools:
+          description: If true, exclude disabled tools from all tool listings
+          type: boolean
         headers:
           additionalProperties:
             type: string
@@ -1313,6 +1322,9 @@ components:
           additionalProperties:
             type: string
           type: object
+        exclude_disabled_tools:
+          description: If true, exclude disabled tools from all tool listings
+          type: boolean
         headers:
           additionalProperties:
             type: string
