@@ -9,9 +9,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -1524,6 +1526,74 @@ func (s *Server) verifyContainersCleanedUp(ctx context.Context) {
 		s.logger.Info("STOPSERVER - Force cleanup succeeded - all containers removed")
 		_ = s.logger.Sync()
 	}
+}
+
+// RequestRestart initiates a graceful restart of the MCPProxy service.
+// This properly handles tray mode, daemon mode, and all launch scenarios.
+func (s *Server) RequestRestart() error {
+	s.logger.Info("REQUESTRESTART CALLED - Initiating graceful restart")
+	_ = s.logger.Sync()
+
+	// Get the current executable and working directory
+	exe, err := os.Executable()
+	if err != nil {
+		s.logger.Error("REQUESTRESTART - Failed to get executable path", zap.Error(err))
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		s.logger.Error("REQUESTRESTART - Failed to get working directory", zap.Error(err))
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Get command line arguments (excluding the executable itself)
+	args := os.Args[1:]
+
+	// Create the command to restart the process
+	cmd := exec.Command(exe, args...)
+	cmd.Dir = cwd
+
+	// On Windows, detach the process so it survives after parent exits
+	// This is done by setting the process to run in a new process group
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		HideWindow:    false,
+	}
+
+	// Redirect output to avoid inheriting handles that might cause issues
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+
+	// Start the new process
+	if err := cmd.Start(); err != nil {
+		s.logger.Error("REQUESTRESTART - Failed to start new process", zap.Error(err))
+		return fmt.Errorf("failed to start new process: %w", err)
+	}
+
+	// Release the process from this parent
+	if err := cmd.Process.Release(); err != nil {
+		s.logger.Warn("REQUESTRESTART - Failed to release process handle", zap.Error(err))
+	}
+
+	s.logger.Info("REQUESTRESTART - New process started successfully", zap.Int("pid", cmd.Process.Pid))
+	_ = s.logger.Sync()
+
+	// Give the new process time to start
+	time.Sleep(2 * time.Second)
+
+	// Stop the current server gracefully
+	s.logger.Info("REQUESTRESTART - Stopping current server")
+	_ = s.logger.Sync()
+
+	if err := s.StopServer(); err != nil {
+		s.logger.Error("REQUESTRESTART - Error during server stop", zap.Error(err))
+	}
+
+	// Exit the current process
+	os.Exit(0)
+	return nil
 }
 
 func resolveDisplayAddress(actual, requested string) string {

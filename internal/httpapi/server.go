@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"os"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -114,6 +111,9 @@ type ServerController interface {
 
 	// Tool execution
 	CallTool(ctx context.Context, toolName string, arguments map[string]interface{}) (interface{}, error)
+
+	// Restart
+	RequestRestart() error
 
 	// Registry browsing (Phase 7)
 	ListRegistries() ([]interface{}, error)
@@ -962,65 +962,10 @@ func (s *Server) handleRestartProxy(w http.ResponseWriter, r *http.Request) {
 		// Give the HTTP response time to be sent
 		time.Sleep(500 * time.Millisecond)
 
-		// Use os/exec to restart the process
-		// This will work when running as a tray application or daemon
-		if err := restartProcess(); err != nil {
-			s.logger.Error("Failed to restart MCPProxy", "error", err)
-		}
+		// Request graceful restart through the controller
+		// This properly handles tray mode, daemon mode, and all launch scenarios
+		s.controller.RequestRestart()
 	}()
-}
-
-// restartProcess attempts to restart the current process
-func restartProcess() error {
-	// Get the current executable path
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	// Get command line arguments (excluding the executable itself)
-	args := os.Args[1:]
-
-	// Create the command with proper process attributes for Windows
-	cmd := exec.Command(exe, args...)
-	cmd.Dir = cwd
-
-	// On Windows, detach the process so it survives after parent exits
-	// This is done by setting the process to run in a new process group
-	if sysProcAttr := cmd.SysProcAttr; sysProcAttr != nil {
-		sysProcAttr.HideWindow = false
-	} else {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    false,
-			CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-		}
-	}
-
-	// Redirect output to avoid inheriting handles that might cause issues
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Stdin = nil
-
-	// Start the new process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start new process: %w", err)
-	}
-
-	// Release the process from this parent
-	cmd.Process.Release()
-
-	// Give the new process time to start
-	time.Sleep(2 * time.Second)
-
-	// Exit the current process
-	os.Exit(0)
-	return nil
 }
 
 // buildWebUIURL constructs the web UI URL based on listen address and request
