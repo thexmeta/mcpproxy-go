@@ -1665,6 +1665,7 @@ func (cpl *CoreProcessLauncher) buildCoreEnvironment() []string {
 	// Add our environment variables
 	filtered = append(filtered,
 		"MCPPROXY_ENABLE_TRAY=false",
+		"MCPPROXY_TRAY_PARENT=1", // Signal to core that it's running under tray
 		fmt.Sprintf("MCPPROXY_API_KEY=%s", trayAPIKey))
 
 	// Pass through TLS configuration if set

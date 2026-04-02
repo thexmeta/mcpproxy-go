@@ -1529,9 +1529,33 @@ func (s *Server) verifyContainersCleanedUp(ctx context.Context) {
 }
 
 // RequestRestart initiates a graceful restart of the MCPProxy service.
-// This properly handles tray mode, daemon mode, and all launch scenarios.
+// When running under the tray, this exits with code 100 to signal the tray to restart.
+// When running standalone, this spawns a new process.
 func (s *Server) RequestRestart() error {
 	s.logger.Info("REQUESTRESTART CALLED - Initiating graceful restart")
+	_ = s.logger.Sync()
+
+	// Check if we're running under the tray by checking the parent process
+	// Tray sets MCPROXY_TRAY_PARENT=1 environment variable
+	runningUnderTray := os.Getenv("MCPPROXY_TRAY_PARENT") == "1"
+
+	if runningUnderTray {
+		s.logger.Info("REQUESTRESTART - Running under tray, exiting with restart code")
+		_ = s.logger.Sync()
+
+		// Stop the server gracefully first
+		if err := s.StopServer(); err != nil {
+			s.logger.Error("REQUESTRESTART - Error during server stop", zap.Error(err))
+		}
+
+		// Exit with special code 100 to signal tray to restart
+		// Exit codes: 0=success, 2=port conflict, 3=db locked, 4=config, 5=permission, 100=restart
+		os.Exit(100)
+		return nil
+	}
+
+	// Standalone mode - spawn new process
+	s.logger.Info("REQUESTRESTART - Running standalone, spawning new process")
 	_ = s.logger.Sync()
 
 	// Get the current executable and working directory
@@ -1555,13 +1579,12 @@ func (s *Server) RequestRestart() error {
 	cmd.Dir = cwd
 
 	// On Windows, detach the process so it survives after parent exits
-	// This is done by setting the process to run in a new process group
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 		HideWindow:    false,
 	}
 
-	// Redirect output to avoid inheriting handles that might cause issues
+	// Redirect output to avoid inheriting handles
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.Stdin = nil

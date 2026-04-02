@@ -76,6 +76,9 @@ const (
 	// EventCoreExited indicates core subprocess exited
 	EventCoreExited Event = "core_exited"
 
+	// EventCoreRestart indicates core requested restart (exit code 100)
+	EventCoreRestart Event = "core_restart"
+
 	// EventPortConflict indicates core failed due to port conflict
 	EventPortConflict Event = "port_conflict"
 

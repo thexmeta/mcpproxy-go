@@ -199,6 +199,9 @@ func (m *Machine) determineNewState(currentState State, event Event) State {
 		switch event {
 		case EventCoreStarted:
 			return StateWaitingForCore
+		case EventCoreRestart:
+			// Core requested restart (exit code 100) - relaunch immediately
+			return StateLaunchingCore
 		case EventPortConflict:
 			return StateCoreErrorPortConflict
 		case EventDBLocked:

@@ -383,6 +383,10 @@ func (pm *ProcessMonitor) handleProcessExit(exitCode int) {
 		pm.stateMachine.SendEvent(state.EventConfigError)
 	case 5: // Permission error
 		pm.stateMachine.SendEvent(state.EventPermissionError)
+	case 100: // Restart requested
+		// Core requested restart - trigger relaunch
+		pm.logger.Info("Restart requested by core (exit code 100), triggering relaunch")
+		pm.stateMachine.SendEvent(state.EventCoreRestart)
 	default: // General error
 		pm.stateMachine.SendEvent(state.EventGeneralError)
 	}
