@@ -114,6 +114,7 @@ type ServerController interface {
 
 	// Restart
 	RequestRestart() error
+	RequestHardRestart() error
 
 	// Registry browsing (Phase 7)
 	ListRegistries() ([]interface{}, error)
@@ -504,8 +505,9 @@ func (s *Server) setupRoutes() {
 		// Info endpoint (server version, web UI URL, etc.)
 		r.Get("/info", s.handleGetInfo)
 
-		// Restart proxy endpoint (self-restart)
-		r.Post("/restart", s.handleRestartProxy)
+		// Restart endpoints
+		r.Post("/restart", s.handleRestartProxy)         // Soft restart (MCP servers only)
+		r.Post("/restart/hard", s.handleHardRestartProxy) // Hard restart (full process)
 
 		// Routing mode endpoint
 		r.Get("/routing", s.handleGetRouting)
@@ -940,8 +942,8 @@ func (s *Server) handleGetInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRestartProxy godoc
-// @Summary Restart the MCPProxy service
-// @Description Restart the entire MCPProxy service (not just individual servers). The service will restart with the same configuration.
+// @Summary Restart MCP servers (SOFT RESTART)
+// @Description Restart all MCP server connections without restarting the entire process
 // @Tags status
 // @Produce json
 // @Security ApiKeyAuth
@@ -950,11 +952,12 @@ func (s *Server) handleGetInfo(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} contracts.ErrorResponse "Internal server error"
 // @Router /api/v1/restart [post]
 func (s *Server) handleRestartProxy(w http.ResponseWriter, r *http.Request) {
-	s.logger.Info("MCPProxy restart requested via API")
+	s.logger.Info("Soft restart requested (MCP servers only)")
 
 	// Send success response immediately
 	s.writeSuccess(w, map[string]interface{}{
-		"message": "MCPProxy is restarting...",
+		"message": "MCP servers are restarting...",
+		"type":    "soft_restart",
 	})
 
 	// Trigger async restart in a goroutine
@@ -963,8 +966,41 @@ func (s *Server) handleRestartProxy(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)
 
 		// Request graceful restart through the controller
-		// This properly handles tray mode, daemon mode, and all launch scenarios
-		s.controller.RequestRestart()
+		if err := s.controller.RequestRestart(); err != nil {
+			s.logger.Error("Soft restart failed", zap.Error(err))
+		}
+	}()
+}
+
+// handleHardRestartProxy godoc
+// @Summary Restart entire MCPProxy process (HARD RESTART)
+// @Description Restart the entire MCPProxy process. USE WITH CAUTION - this will restart the entire application.
+// @Tags status
+// @Produce json
+// @Security ApiKeyAuth
+// @Security ApiKeyQuery
+// @Success 200 {object} contracts.SuccessResponse "Restart initiated successfully"
+// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
+// @Router /api/v1/restart/hard [post]
+func (s *Server) handleHardRestartProxy(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("HARD RESTART requested (full process restart)")
+
+	// Send success response immediately
+	s.writeSuccess(w, map[string]interface{}{
+		"message": "MCPProxy is performing a HARD RESTART (full process restart)...",
+		"type":    "hard_restart",
+		"warning": "The entire application will restart. This may take a few seconds.",
+	})
+
+	// Trigger async hard restart in a goroutine
+	go func() {
+		// Give the HTTP response time to be sent
+		time.Sleep(500 * time.Millisecond)
+
+		// Request hard restart through the controller
+		if err := s.controller.RequestHardRestart(); err != nil {
+			s.logger.Error("Hard restart failed", zap.Error(err))
+		}
 	}()
 }
 

@@ -7,17 +7,32 @@
         <p class="text-base-content/70 mt-1">Edit your MCPProxy configuration directly. Changes require restart for some settings.</p>
       </div>
       <div class="flex items-center space-x-2">
+        <!-- Soft Restart Button -->
         <button
-          @click="restartProxy"
+          @click="restartProxy('soft')"
           :disabled="restartingProxy"
-          class="btn btn-warning"
-          title="Restart the entire MCPProxy service"
+          class="btn btn-warning btn-sm"
+          title="Restart all MCP servers (soft restart)"
         >
-          <span v-if="restartingProxy" class="loading loading-spinner loading-sm"></span>
-          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span v-if="restartingProxy" class="loading loading-spinner loading-xs"></span>
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Restart Proxy
+          Soft Restart
+        </button>
+        
+        <!-- Hard Restart Button -->
+        <button
+          @click="restartProxy('hard')"
+          :disabled="restartingProxy"
+          class="btn btn-error btn-sm"
+          title="Restart entire MCPProxy process (HARD RESTART - use with caution)"
+        >
+          <span v-if="restartingProxy" class="loading loading-spinner loading-xs"></span>
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Hard Restart
         </button>
       </div>
     </div>
@@ -267,42 +282,67 @@ async function applyConfig() {
   }
 }
 
-async function restartProxy() {
+async function restartProxy(type: 'soft' | 'hard' = 'soft') {
   restartingProxy.value = true
 
   try {
-    const confirmed = await confirmRestart()
+    const confirmed = await confirmRestart(type)
     if (!confirmed) {
       restartingProxy.value = false
       return
     }
 
-    const response = await api.restartProxy()
+    // Call appropriate API endpoint
+    let response
+    if (type === 'hard') {
+      response = await api.restartProxyHard()
+    } else {
+      response = await api.restartProxy()
+    }
+    
     if (response.success) {
-      // Show success message
-      alert('MCPProxy is restarting...\n\nThe page will reload automatically.')
-      
-      // Wait a moment then reload the page
-      setTimeout(() => {
-        window.location.reload()
-      }, 2000)
+      if (type === 'hard') {
+        // Hard restart - page will reload
+        alert('MCPProxy is performing a HARD RESTART...\n\nThe page will reload automatically in a few seconds.')
+        setTimeout(() => {
+          window.location.reload()
+        }, 3000)
+      } else {
+        // Soft restart - just notify
+        alert('MCP servers are restarting (SOFT RESTART)...\n\nThe main process continues running.')
+      }
     } else {
       alert(`Failed to restart: ${response.error || 'Unknown error'}`)
     }
   } catch (error: any) {
-    console.error('Failed to restart proxy:', error)
+    console.error(`Failed to ${type} restart proxy:`, error)
     alert(`Failed to restart: ${error.message || 'Unknown error'}`)
   } finally {
     restartingProxy.value = false
   }
 }
 
-async function confirmRestart(): Promise<boolean> {
-  return confirm(
-    'Are you sure you want to restart MCPProxy?\n\n' +
-    'This will restart the entire service. The page will reload automatically after restart.\n\n' +
-    'Click OK to continue.'
-  )
+async function confirmRestart(type: 'soft' | 'hard'): Promise<boolean> {
+  if (type === 'hard') {
+    return confirm(
+      '⚠️  WARNING: HARD RESTART ⚠️\n\n' +
+      'This will restart the ENTIRE MCPProxy process.\n\n' +
+      '• All MCP servers will be restarted\n' +
+      '• The main process will restart\n' +
+      '• Configuration is preserved\n' +
+      '• This may take a few seconds\n\n' +
+      'Click OK to continue with HARD RESTART.'
+    )
+  } else {
+    return confirm(
+      'SOFT RESTART\n\n' +
+      'This will restart all MCP server connections.\n\n' +
+      '• MCP servers will be restarted\n' +
+      '• Main process continues running\n' +
+      '• Configuration is preserved\n\n' +
+      'Click OK to continue.'
+    )
+  }
 }
 
 // Settings hints

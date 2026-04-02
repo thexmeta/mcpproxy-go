@@ -2821,8 +2821,8 @@ paths:
       - registries
   /api/v1/restart:
     post:
-      description: Restart the entire MCPProxy service (not just individual servers).
-        The service will restart with the same configuration.
+      description: Restart all MCP server connections without restarting the entire
+        process
       responses:
         "200":
           content:
@@ -2839,7 +2839,30 @@ paths:
       security:
       - ApiKeyAuth: []
       - ApiKeyQuery: []
-      summary: Restart the MCPProxy service
+      summary: Restart MCP servers (SOFT RESTART)
+      tags:
+      - status
+  /api/v1/restart/hard:
+    post:
+      description: Restart the entire MCPProxy process. USE WITH CAUTION - this will
+        restart the entire application.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.SuccessResponse'
+          description: Restart initiated successfully
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Restart entire MCPProxy process (HARD RESTART)
       tags:
       - status
   /api/v1/routing:

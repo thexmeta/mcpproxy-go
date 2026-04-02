@@ -221,6 +221,12 @@ class APIService {
     })
   }
 
+  async restartProxyHard(): Promise<APIResponse> {
+    return this.request('/api/v1/restart/hard', {
+      method: 'POST',
+    })
+  }
+
   // Routing mode endpoint
   async getRouting(): Promise<APIResponse<RoutingInfo>> {
     return this.request<RoutingInfo>('/api/v1/routing')

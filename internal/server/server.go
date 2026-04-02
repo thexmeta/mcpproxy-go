@@ -9,9 +9,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -1529,7 +1531,7 @@ func (s *Server) verifyContainersCleanedUp(ctx context.Context) {
 // RequestRestart initiates a graceful restart of all MCP servers.
 // This restarts all upstream MCP server connections without restarting the entire process.
 func (s *Server) RequestRestart() error {
-	s.logger.Info("REQUESTRESTART CALLED - Restarting all MCP servers")
+	s.logger.Info("REQUESTRESTART CALLED - Restarting all MCP servers (SOFT RESTART)")
 	_ = s.logger.Sync()
 
 	// Get management service to restart all servers
@@ -1567,6 +1569,114 @@ func (s *Server) RequestRestart() error {
 		zap.Int("failed", result.Failed))
 	_ = s.logger.Sync()
 
+	return nil
+}
+
+// RequestHardRestart initiates a full process restart (HARD RESTART).
+// This spawns a new mcpproxy process with the same arguments and exits the current one.
+// USE WITH CAUTION: This will restart the entire application, not just MCP servers.
+func (s *Server) RequestHardRestart() error {
+	s.logger.Info("REQUESTHARDRESTART CALLED - Initiating full process restart (HARD RESTART)")
+	_ = s.logger.Sync()
+
+	// Check if we're running under the tray by checking the parent process
+	// Tray sets MCPPROXY_TRAY_PARENT=1 environment variable
+	runningUnderTray := os.Getenv("MCPPROXY_TRAY_PARENT") == "1"
+
+	s.logger.Info("REQUESTHARDRESTART - Environment check",
+		zap.Bool("running_under_tray", runningUnderTray),
+		zap.String("MCPPROXY_TRAY_PARENT", os.Getenv("MCPPROXY_TRAY_PARENT")))
+	_ = s.logger.Sync()
+
+	if runningUnderTray {
+		s.logger.Info("REQUESTHARDRESTART - Running under tray, exiting with restart code 100")
+		_ = s.logger.Sync()
+
+		// Stop the server gracefully first
+		if err := s.StopServer(); err != nil {
+			s.logger.Error("REQUESTHARDRESTART - Error during server stop", zap.Error(err))
+		}
+
+		// Exit with special code 100 to signal tray to restart
+		// Exit codes: 0=success, 2=port conflict, 3=db locked, 4=config, 5=permission, 100=restart
+		s.logger.Info("REQUESTHARDRESTART - Calling os.Exit(100)")
+		_ = s.logger.Sync()
+		os.Exit(100)
+		return nil
+	}
+
+	// Standalone mode - spawn new process
+	s.logger.Info("REQUESTHARDRESTART - Running standalone, spawning new process")
+	_ = s.logger.Sync()
+
+	// Get the current executable path
+	exe, err := os.Executable()
+	if err != nil {
+		s.logger.Error("REQUESTHARDRESTART - Failed to get executable path", zap.Error(err))
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		s.logger.Error("REQUESTHARDRESTART - Failed to get working directory", zap.Error(err))
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Get command line arguments (excluding the executable itself)
+	args := os.Args[1:]
+
+	s.logger.Info("REQUESTHARDRESTART - Spawning new process",
+		zap.String("exe", exe),
+		zap.Strings("args", args),
+		zap.String("cwd", cwd))
+	_ = s.logger.Sync()
+
+	// Create the command to restart the process
+	cmd := exec.Command(exe, args...)
+	cmd.Dir = cwd
+
+	// On Windows, detach the process so it survives after parent exits
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		HideWindow:    false,
+	}
+
+	// Redirect output to avoid inheriting handles
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+
+	// Start the new process
+	if err := cmd.Start(); err != nil {
+		s.logger.Error("REQUESTHARDRESTART - Failed to start new process", zap.Error(err))
+		return fmt.Errorf("failed to start new process: %w", err)
+	}
+
+	// Release the process from this parent
+	if err := cmd.Process.Release(); err != nil {
+		s.logger.Warn("REQUESTHARDRESTART - Failed to release process handle", zap.Error(err))
+	}
+
+	s.logger.Info("REQUESTHARDRESTART - New process started successfully",
+		zap.Int("pid", cmd.Process.Pid))
+	_ = s.logger.Sync()
+
+	// Give the new process time to start
+	s.logger.Info("REQUESTHARDRESTART - Waiting 2 seconds for new process to start")
+	time.Sleep(2 * time.Second)
+
+	// Stop the current server gracefully
+	s.logger.Info("REQUESTHARDRESTART - Stopping current server")
+	_ = s.logger.Sync()
+
+	if err := s.StopServer(); err != nil {
+		s.logger.Error("REQUESTHARDRESTART - Error during server stop", zap.Error(err))
+	}
+
+	// Exit the current process
+	s.logger.Info("REQUESTHARDRESTART - Calling os.Exit(0)")
+	_ = s.logger.Sync()
+	os.Exit(0)
 	return nil
 }
 
