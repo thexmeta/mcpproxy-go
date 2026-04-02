@@ -2820,6 +2820,29 @@ paths:
       summary: Search MCP servers in a registry
       tags:
       - registries
+  /api/v1/restart:
+    post:
+      description: Restart the entire MCPProxy service (not just individual servers).
+        The service will restart with the same configuration.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.SuccessResponse'
+          description: Restart initiated successfully
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Restart the MCPProxy service
+      tags:
+      - status
   /api/v1/routing:
     get:
       description: Get the current routing mode and available MCP endpoints
