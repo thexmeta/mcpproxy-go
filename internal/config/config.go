@@ -207,25 +207,25 @@ type LogConfig struct {
 
 // ServerConfig represents upstream MCP server configuration
 type ServerConfig struct {
-	Name           string            `json:"name,omitempty" mapstructure:"name"`
-	URL            string            `json:"url,omitempty" mapstructure:"url"`
-	Protocol       string            `json:"protocol,omitempty" mapstructure:"protocol"` // stdio, http, sse, streamable-http, auto
-	Command        string            `json:"command,omitempty" mapstructure:"command"`
-	Args           []string          `json:"args,omitempty" mapstructure:"args"`
-	WorkingDir     string            `json:"working_dir,omitempty" mapstructure:"working_dir"` // Working directory for stdio servers
-	Env            map[string]string `json:"env,omitempty" mapstructure:"env"`
-	Headers        map[string]string `json:"headers,omitempty" mapstructure:"headers"` // For HTTP servers
-	OAuth          *OAuthConfig      `json:"oauth" mapstructure:"oauth"`               // OAuth configuration (keep even when empty to signal OAuth requirement)
-	Enabled        bool              `json:"enabled" mapstructure:"enabled"`
-	Quarantined    bool              `json:"quarantined" mapstructure:"quarantined"`                   // Security quarantine status
-	SkipQuarantine bool              `json:"skip_quarantine,omitempty" mapstructure:"skip-quarantine"` // Skip tool-level quarantine for this server
-	Shared         bool              `json:"shared,omitempty" mapstructure:"shared"`                   // Server edition: shared with all users
-	Created        time.Time         `json:"created" mapstructure:"created"`
-	Updated        time.Time         `json:"updated,omitempty" mapstructure:"updated"`
-	Isolation      *IsolationConfig  `json:"isolation,omitempty" mapstructure:"isolation"`           // Per-server isolation settings
-	ReconnectOnUse bool              `json:"reconnect_on_use,omitempty" mapstructure:"reconnect-on-use"` // Attempt reconnection when a tool call targets a disconnected server
-	DisabledTools  []string          `json:"disabled_tools,omitempty" mapstructure:"disabled_tools"` // // Tools disabled for this server
-	ExcludeDisabledTools bool        `json:"exclude_disabled_tools,omitempty" mapstructure:"exclude_disabled_tools"` // If true, exclude disabled tools from all tool listings
+	Name                 string            `json:"name,omitempty" mapstructure:"name"`
+	URL                  string            `json:"url,omitempty" mapstructure:"url"`
+	Protocol             string            `json:"protocol,omitempty" mapstructure:"protocol"` // stdio, http, sse, streamable-http, auto
+	Command              string            `json:"command,omitempty" mapstructure:"command"`
+	Args                 []string          `json:"args,omitempty" mapstructure:"args"`
+	WorkingDir           string            `json:"working_dir,omitempty" mapstructure:"working_dir"` // Working directory for stdio servers
+	Env                  map[string]string `json:"env,omitempty" mapstructure:"env"`
+	Headers              map[string]string `json:"headers,omitempty" mapstructure:"headers"` // For HTTP servers
+	OAuth                *OAuthConfig      `json:"oauth" mapstructure:"oauth"`               // OAuth configuration (keep even when empty to signal OAuth requirement)
+	Enabled              bool              `json:"enabled" mapstructure:"enabled"`
+	Quarantined          bool              `json:"quarantined" mapstructure:"quarantined"`                   // Security quarantine status
+	SkipQuarantine       bool              `json:"skip_quarantine,omitempty" mapstructure:"skip-quarantine"` // Skip tool-level quarantine for this server
+	Shared               bool              `json:"shared,omitempty" mapstructure:"shared"`                   // Server edition: shared with all users
+	Created              time.Time         `json:"created" mapstructure:"created"`
+	Updated              time.Time         `json:"updated,omitempty" mapstructure:"updated"`
+	Isolation            *IsolationConfig  `json:"isolation,omitempty" mapstructure:"isolation"`               // Per-server isolation settings
+	ReconnectOnUse       bool              `json:"reconnect_on_use,omitempty" mapstructure:"reconnect-on-use"` // Attempt reconnection when a tool call targets a disconnected server
+	DisabledTools        []string          `json:"disabled_tools,omitempty" mapstructure:"disabled-tools"`     // Tools disabled for this server
+	ExcludeDisabledTools bool              `json:"exclude_disabled_tools,omitempty" mapstructure:"exclude-disabled-tools"` // If true, exclude disabled tools from all tool listings
 }
 
 // IsToolDisabled checks if a tool is in the disabled list
@@ -253,6 +253,7 @@ func (s *ServerConfig) EnableTool(toolName string) {
 			return
 		}
 	}
+}
 }
 
 // OAuthConfig represents OAuth configuration for a server

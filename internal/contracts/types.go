@@ -15,52 +15,45 @@ type APIResponse struct {
 
 // Server represents an upstream MCP server configuration and status
 type Server struct {
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	URL             string            `json:"url,omitempty"`
-	Protocol        string            `json:"protocol"`
-	Command         string            `json:"command,omitempty"`
-	Args            []string          `json:"args,omitempty"`
-	WorkingDir      string            `json:"working_dir,omitempty"`
-	Env             map[string]string `json:"env,omitempty"`
-	Headers         map[string]string `json:"headers,omitempty"`
-	OAuth           *OAuthConfig      `json:"oauth,omitempty"`
-	Enabled         bool              `json:"enabled"`
-	Quarantined     bool              `json:"quarantined"`
-	Connected       bool              `json:"connected"`
-	Connecting      bool              `json:"connecting"`
-	Status          string            `json:"status"`
-	LastError       string            `json:"last_error,omitempty"`
-	ConnectedAt     *time.Time        `json:"connected_at,omitempty"`
-	LastReconnectAt *time.Time        `json:"last_reconnect_at,omitempty"`
-	ReconnectCount  int               `json:"reconnect_count"`
-	ToolCount       int               `json:"tool_count"`
-	Created         time.Time         `json:"created"`
-	Updated         time.Time         `json:"updated"`
-	Isolation       *IsolationConfig  `json:"isolation,omitempty"`
-	// IsolationDefaults exposes the resolved baseline values that
-	// would apply when no per-server override is set. Populated on
-	// list/get responses; never consumed on PATCH requests.
-	IsolationDefaults *IsolationDefaults   `json:"isolation_defaults,omitempty"`
-	Authenticated     bool                 `json:"authenticated"`                  // OAuth authentication status
-	OAuthStatus       string               `json:"oauth_status,omitempty"`         // OAuth status: "authenticated", "expired", "error", "none"
-	TokenExpiresAt    *time.Time           `json:"token_expires_at,omitempty"`     // When the OAuth token expires (ISO 8601)
-	ToolListTokenSize int                  `json:"tool_list_token_size,omitempty"` // Token size for this server's tools
-	ShouldRetry       bool                 `json:"should_retry,omitempty"`
-	RetryCount        int                  `json:"retry_count,omitempty"`
-	LastRetryTime     *time.Time           `json:"last_retry_time,omitempty"`
-	UserLoggedOut     bool                 `json:"user_logged_out,omitempty"`  // True if user explicitly logged out (prevents auto-reconnection)
-	Health            *HealthStatus        `json:"health,omitempty"`           // Unified health status calculated by the backend
-	Quarantine        *QuarantineStats     `json:"quarantine,omitempty"`       // Tool quarantine metrics for this server
-	ReconnectOnUse    bool                 `json:"reconnect_on_use,omitempty"` // Attempt reconnection when a tool call targets this disconnected server
-	SecurityScan      *SecurityScanSummary `json:"security_scan,omitempty"`    // Latest security scan results summary
-	// Spec 044 — structured diagnostic error and stable error code. Both
-	// are populated when the server is in a failed state and the error
-	// has been classified by internal/diagnostics. Healthy servers omit
-	// these fields.
-	Diagnostic *Diagnostic `json:"diagnostic,omitempty"`
-	ErrorCode  string      `json:"error_code,omitempty"`
-	ExcludeDisabledTools bool              `json:"exclude_disabled_tools,omitempty"` // If true, hide disabled tools from listings
+	ID                   string               `json:"id"`
+	Name                 string               `json:"name"`
+	URL                  string               `json:"url,omitempty"`
+	Protocol             string               `json:"protocol"`
+	Command              string               `json:"command,omitempty"`
+	Args                 []string             `json:"args,omitempty"`
+	WorkingDir           string               `json:"working_dir,omitempty"`
+	Env                  map[string]string    `json:"env,omitempty"`
+	Headers              map[string]string    `json:"headers,omitempty"`
+	OAuth                *OAuthConfig         `json:"oauth,omitempty"`
+	Enabled              bool                 `json:"enabled"`
+	Quarantined          bool                 `json:"quarantined"`
+	Connected            bool                 `json:"connected"`
+	Connecting           bool                 `json:"connecting"`
+	Status               string               `json:"status"`
+	LastError            string               `json:"last_error,omitempty"`
+	ConnectedAt          *time.Time           `json:"connected_at,omitempty"`
+	LastReconnectAt      *time.Time           `json:"last_reconnect_at,omitempty"`
+	ReconnectCount       int                  `json:"reconnect_count"`
+	ToolCount            int                  `json:"tool_count"`
+	Created              time.Time            `json:"created"`
+	Updated              time.Time            `json:"updated"`
+	Isolation            *IsolationConfig     `json:"isolation,omitempty"`
+	IsolationDefaults    *IsolationDefaults   `json:"isolation_defaults,omitempty"`
+	Authenticated        bool                 `json:"authenticated"`                  // OAuth authentication status
+	OAuthStatus          string               `json:"oauth_status,omitempty"`         // OAuth status: "authenticated", "expired", "error", "none"
+	TokenExpiresAt       *time.Time           `json:"token_expires_at,omitempty"`     // When the OAuth token expires (ISO 8601)
+	ToolListTokenSize    int                  `json:"tool_list_token_size,omitempty"` // Token size for this server's tools
+	ShouldRetry          bool                 `json:"should_retry,omitempty"`
+	RetryCount           int                  `json:"retry_count,omitempty"`
+	LastRetryTime        *time.Time           `json:"last_retry_time,omitempty"`
+	UserLoggedOut        bool                 `json:"user_logged_out,omitempty"`  // True if user explicitly logged out (prevents auto-reconnection)
+	Health               *HealthStatus        `json:"health,omitempty"`           // Unified health status calculated by the backend
+	Quarantine           *QuarantineStats     `json:"quarantine,omitempty"`       // Tool quarantine metrics for this server
+	ReconnectOnUse       bool                 `json:"reconnect_on_use,omitempty"` // Attempt reconnection when a tool call targets this disconnected server
+	SecurityScan         *SecurityScanSummary `json:"security_scan,omitempty"`    // Latest security scan results summary
+	Diagnostic           *Diagnostic          `json:"diagnostic,omitempty"`       // Spec 044 diagnostic details
+	ErrorCode            string               `json:"error_code,omitempty"`       // Spec 044 stable error code
+	ExcludeDisabledTools bool                 `json:"exclude_disabled_tools,omitempty"` // If true, exclude disabled tools from all tool listings
 }
 
 // Diagnostic is the REST-API representation of a classified server failure.
@@ -851,6 +844,17 @@ type UpdateInfo struct {
 type InfoEndpoints struct {
 	HTTP   string `json:"http"`   // HTTP endpoint address (e.g., "127.0.0.1:8080")
 	Socket string `json:"socket"` // Unix socket path (empty if disabled)
+}
+
+// ToolPreference represents per-server tool preferences for AI agent control.
+// Allows customization of tool enablement, names, and descriptions.
+type ToolPreference struct {
+	Enabled           bool       `json:"enabled"`                    // Whether tool is enabled
+	CustomName        string     `json:"custom_name,omitempty"`      // Custom display name (optional)
+	CustomDescription string     `json:"custom_description,omitempty"` // Custom description (optional)
+	OriginalName      string     `json:"original_name,omitempty"`    // Original tool name (for reference)
+	LastUsed          *time.Time `json:"last_used,omitempty"`        // Last time the tool was used (optional)
+	CallCount         int        `json:"call_count,omitempty"`       // Number of times the tool has been called (optional)
 }
 
 // InfoResponse is the response for GET /api/v1/info
