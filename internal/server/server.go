@@ -1539,8 +1539,13 @@ func (s *Server) RequestRestart() error {
 	// Tray sets MCPROXY_TRAY_PARENT=1 environment variable
 	runningUnderTray := os.Getenv("MCPPROXY_TRAY_PARENT") == "1"
 
+	s.logger.Info("REQUESTRESTART - Environment check",
+		zap.Bool("running_under_tray", runningUnderTray),
+		zap.String("MCPPROXY_TRAY_PARENT", os.Getenv("MCPPROXY_TRAY_PARENT")))
+	_ = s.logger.Sync()
+
 	if runningUnderTray {
-		s.logger.Info("REQUESTRESTART - Running under tray, exiting with restart code")
+		s.logger.Info("REQUESTRESTART - Running under tray, exiting with restart code 100")
 		_ = s.logger.Sync()
 
 		// Stop the server gracefully first
@@ -1550,6 +1555,8 @@ func (s *Server) RequestRestart() error {
 
 		// Exit with special code 100 to signal tray to restart
 		// Exit codes: 0=success, 2=port conflict, 3=db locked, 4=config, 5=permission, 100=restart
+		s.logger.Info("REQUESTRESTART - Calling os.Exit(100)")
+		_ = s.logger.Sync()
 		os.Exit(100)
 		return nil
 	}
@@ -1558,7 +1565,7 @@ func (s *Server) RequestRestart() error {
 	s.logger.Info("REQUESTRESTART - Running standalone, spawning new process")
 	_ = s.logger.Sync()
 
-	// Get the current executable and working directory
+	// Get the current executable path
 	exe, err := os.Executable()
 	if err != nil {
 		s.logger.Error("REQUESTRESTART - Failed to get executable path", zap.Error(err))
@@ -1573,6 +1580,12 @@ func (s *Server) RequestRestart() error {
 
 	// Get command line arguments (excluding the executable itself)
 	args := os.Args[1:]
+
+	s.logger.Info("REQUESTRESTART - Spawning new process",
+		zap.String("exe", exe),
+		zap.Strings("args", args),
+		zap.String("cwd", cwd))
+	_ = s.logger.Sync()
 
 	// Create the command to restart the process
 	cmd := exec.Command(exe, args...)
@@ -1600,10 +1613,12 @@ func (s *Server) RequestRestart() error {
 		s.logger.Warn("REQUESTRESTART - Failed to release process handle", zap.Error(err))
 	}
 
-	s.logger.Info("REQUESTRESTART - New process started successfully", zap.Int("pid", cmd.Process.Pid))
+	s.logger.Info("REQUESTRESTART - New process started successfully",
+		zap.Int("pid", cmd.Process.Pid))
 	_ = s.logger.Sync()
 
 	// Give the new process time to start
+	s.logger.Info("REQUESTRESTART - Waiting 2 seconds for new process to start")
 	time.Sleep(2 * time.Second)
 
 	// Stop the current server gracefully
@@ -1615,6 +1630,8 @@ func (s *Server) RequestRestart() error {
 	}
 
 	// Exit the current process
+	s.logger.Info("REQUESTRESTART - Calling os.Exit(0)")
+	_ = s.logger.Sync()
 	os.Exit(0)
 	return nil
 }
