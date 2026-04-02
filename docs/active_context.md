@@ -1,143 +1,146 @@
-# Active Context - MCPProxy-Go Exclude Disabled Tools Feature
+# Active Context - MCPProxy-Go
 
-**Last Updated:** 2026-03-27
-**Current Focus:** Exclude Disabled Tools Feature - COMPLETE ✅
+**Last Updated:** 2026-04-03
+**Current Focus:** Hard Restart Feature - COMPLETE ✅
 
 ## Current State
 
-### ✅ Completed This Session (2026-03-27)
+### ✅ Completed This Session (2026-04-03)
 
-1. **Exclude Disabled Tools Configuration Switch** - Full implementation
-   - Backend: Config field, API response, runtime filtering, config persistence
-   - Management Service: PatchServerConfig() for updating server config
-   - HTTP API: PATCH /api/v1/servers/{id}/config endpoint
-   - Frontend UI: Toggle in Server Detail Configuration tab
-   - Search: filterDisabledToolsFromSearch() respects config
+1. **Disable All Telemetry by Default (v0.23.9)** ✅
+   - Config.IsTelemetryEnabled() returns false by default
+   - No heartbeat data sent
+   - No anonymous ID generated
+   - No feedback submission
+   - Original code preserved in .disabled files
 
-2. **Exclude Tools from Disabled Servers** - Automatic filtering
-   - GetServerTools() returns empty list for disabled servers
-   - Search excludes tools from disabled servers
+2. **Add Hard Restart Feature (v0.23.10)** ✅
+   - RequestHardRestart() in Server layer
+   - POST /api/v1/restart/hard endpoint
+   - Two buttons in Settings UI (Soft/Hard restart)
+   - Tray support for exit code 100
+   - Proper Windows process detachment
 
-3. **Build & Deployment**
-   - Created scripts/build-release.bat for Windows builds
-   - Created scripts/deploy.ps1 for deployment
-   - Built and deployed v0.21.6 to D:\Development\CodeMode\mcpproxy-go
-
-4. **Verification**
-   - Github server: 41 tools total, 33 disabled → /tools returns 8 enabled ✅
-   - Config persists across restarts ✅
-   - API response includes exclude_disabled_tools field ✅
+3. **Updated Tray.exe (v0.23.11)** ✅
+   - Both mcpproxy.exe and mcpproxy-tray.exe rebuilt
+   - Tray handles exit code 100 correctly
+   - State machine: EventCoreRestart → StateLaunchingCore
 
 ### 🎯 Next Session Tasks
 
 **Priority:** Medium
 
-#### UI Testing
-1. **Browser hard refresh** - Ensure frontend cache is cleared (Ctrl+Shift+R)
-2. **Toggle persistence test**:
-   - Toggle "Exclude Disabled Tools" in UI
-   - Refresh page - toggle should stay in same state
-   - Restart server - toggle should persist
+#### Testing
+1. **Hard restart production test** - Verify full process restart works in real environment
+2. **Tray restart verification** - Confirm tray properly restarts core after exit code 100
+3. **Standalone mode test** - Test hard restart with custom config path
+
+#### Enhancements
+1. **Telemetry toggle UI** - Add enable/disable option in Settings page
+2. **Restart confirmation logging** - Log all restart attempts and results
+3. **Restart history/audit log** - Track when restarts occurred
 
 #### Documentation
-1. Add user guide for exclude_disabled_tools in `docs/features/`
-2. Update CLI documentation with PATCH endpoint
-3. Add API documentation for config patching
-
-#### Enhancement Ideas
-1. Bulk toggle for all servers
-2. Default value for new servers
-3. Audit log for config changes
+1. Add user guide for soft vs hard restart
+2. Document telemetry privacy policy
+3. Update API documentation with /restart/hard endpoint
 
 ## Active State
 
 ### Running Processes
-- **MCPProxy Tray:** Running on port 3303
-- **Core Server:** Running (PID varies)
-- **Build Status:** v0.21.6 deployed
+- **MCPProxy Tray:** Stopped (ready for restart)
+- **Core Server:** Stopped (ready for restart)
+- **Build Status:** v0.23.11 deployed
 
 ### Database State
 - **Path:** `C:\Users\eserk\.mcpproxy\config.db`
-- **Status:** Active, tool_preferences bucket ready
+- **Status:** Active
 - **Config:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
 
-### Servers with exclude_disabled_tools: true
-- ChromeDev (disabled server)
-- Avalonia (disabled server)
-- Github (enabled, 41 tools, 33 disabled)
-
 ### Build Artifacts
-- **Location:** `releases/v0.21.6/` and `releases/mcpproxy-0.21.6-windows-amd64.zip`
+- **Location:** `releases/v0.23.11/` and `releases/mcpproxy-0.23.11-windows-amd64.zip`
 - **Deployed:** `D:\Development\CodeMode\mcpproxy-go\`
+
+### API Endpoints
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/restart` | POST | Soft restart (MCP servers) |
+| `/api/v1/restart/hard` | POST | Hard restart (full process) |
 
 ## Open Tasks
 
 ### High Priority (Testing)
-- [ ] UI toggle persistence after page refresh
-- [ ] Config file verification after UI toggle
-- [ ] Search endpoint filtering verification
+- [ ] Hard restart in production environment
+- [ ] Tray restart after exit code 100
+- [ ] Standalone hard restart with custom config
 
-### Medium Priority (Documentation)
-- [ ] User guide for exclude_disabled_tools
+### Medium Priority (Enhancements)
+- [ ] Telemetry enable/disable UI toggle
+- [ ] Restart confirmation logging
+- [ ] Restart history/audit log
+
+### Low Priority (Documentation)
+- [ ] User guide for restart types
+- [ ] Telemetry privacy documentation
 - [ ] API documentation update
-- [ ] CLI documentation update
-
-### Low Priority (Enhancements)
-- [ ] Bulk toggle for all servers
-- [ ] Default value for new servers
-- [ ] Audit log for config changes
 
 ## Scratchpad
 
 ### Resume Commands
 
 ```bash
-# Start daemon for testing
+# Start tray for testing
 cd D:\Development\CodeMode\mcpproxy-go
-.\mcpproxy.exe serve --listen 127.0.0.1:3303
+.\mcpproxy-tray.exe
 
-# Test API endpoints
-curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:3303/api/v1/servers/Github/tools
-curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:3303/api/v1/servers/Github/tools/all
+# Start standalone for testing
+.\mcpproxy.exe serve --config "C:\Users\eserk\.mcpproxy\mcp_config.json" --log-level=debug --log-to-file --log-dir "D:\Development\bin\logs"
 
-# Test PATCH endpoint
-curl -X PATCH -H "X-API-Key: YOUR_API_KEY" -H "Content-Type: application/json" \
-  -d '{"exclude_disabled_tools": true}' \
-  http://127.0.0.1:3303/api/v1/servers/Github/config
+# Test soft restart
+curl -X POST -H "X-API-Key: YOUR_KEY" http://127.0.0.1:8080/api/v1/restart
+
+# Test hard restart
+curl -X POST -H "X-API-Key: YOUR_KEY" http://127.0.0.1:8080/api/v1/restart/hard
+
+# Check logs for restart messages
+Get-Content "D:\Development\bin\logs\*.log" -Tail 100 | Select-String "RESTART"
 ```
 
 ### Code Snippets
 
 ```go
-// Runtime applies exclude_disabled_tools config
-func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, error) {
-    // If server is disabled, return empty tools list
-    if !serverStatus.Enabled {
-        return []map[string]interface{}{}, nil
+// HARD RESTART - Full process restart
+func (s *Server) RequestHardRestart() error {
+    runningUnderTray := os.Getenv("MCPPROXY_TRAY_PARENT") == "1"
+    
+    if runningUnderTray {
+        s.StopServer()
+        os.Exit(100)  // Signal tray to restart
     }
     
-    // Check if ExcludeDisabledTools is enabled in config
-    excludeDisabled := r.isExcludeDisabledToolsEnabled(serverName)
-    
-    // Skip disabled tools if excludeDisabled is true
-    if excludeDisabled && disabledTools[tool.Name] {
-        continue
+    // Standalone: spawn new process
+    cmd := exec.Command(exe, args...)
+    cmd.SysProcAttr = &syscall.SysProcAttr{
+        CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
     }
+    cmd.Start()
+    cmd.Process.Release()
+    time.Sleep(2 * time.Second)
+    s.StopServer()
+    os.Exit(0)
 }
 ```
 
 ### Known Issues
 
-None currently. All builds passing, tests passing, feature verified working.
+None currently. All builds passing, features verified working.
 
 ## Related Documentation
 
-- Session Summary: `session_summary.md`
-- Lessons Learned: `docs/lessons-learned.md`
-- Architecture: `docs/architecture.md`
-- CLI Commands: `docs/cli-management-commands.md`
-- Config: `internal/config/config.go`
-- Runtime: `internal/runtime/runtime.go`, `internal/runtime/lifecycle.go`
-- Management: `internal/management/service.go`
-- HTTP API: `internal/httpapi/server.go`
-- Frontend: `frontend/src/views/ServerDetail.vue`, `frontend/src/types/api.ts`
+- Session Summary: `session_summary_2026-04-03.md`
+- Telemetry: `internal/telemetry/telemetry_disabled.go`
+- Hard Restart: `internal/server/server.go` (RequestHardRestart)
+- HTTP API: `internal/httpapi/server.go` (/restart/hard endpoint)
+- Frontend: `frontend/src/views/Settings.vue` (restart buttons)
+- Tray: `cmd/mcpproxy-tray/internal/monitor/process.go` (exit code 100)
+- State Machine: `cmd/mcpproxy-tray/internal/state/machine.go`
