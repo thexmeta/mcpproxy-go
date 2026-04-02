@@ -1232,18 +1232,21 @@ type TelemetryConfig struct {
 }
 
 // IsTelemetryEnabled returns whether telemetry is enabled.
-// Respects MCPPROXY_TELEMETRY=false env var override and defaults to true.
+// TELEMETRY IS DISABLED BY DEFAULT for privacy.
+// Set MCPPROXY_TELEMETRY=true env var or telemetry.enabled=true in config to enable.
 func (c *Config) IsTelemetryEnabled() bool {
-	if os.Getenv("MCPPROXY_TELEMETRY") == "false" {
-		return false
+	// Check explicit config setting first
+	if c.Telemetry != nil && c.Telemetry.Enabled != nil {
+		return *c.Telemetry.Enabled
 	}
-	if c.Telemetry == nil {
-		return true // default enabled
-	}
-	if c.Telemetry.Enabled == nil {
+	
+	// Check environment variable override
+	if os.Getenv("MCPPROXY_TELEMETRY") == "true" {
 		return true
 	}
-	return *c.Telemetry.Enabled
+	
+	// Default: DISABLED for privacy
+	return false
 }
 
 // GetTelemetryEndpoint returns the telemetry endpoint URL.

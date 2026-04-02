@@ -1863,7 +1863,6 @@ components:
     telemetry.FeedbackRequest:
       properties:
         category:
-          description: bug, feature, other
           type: string
         context:
           $ref: '#/components/schemas/telemetry.FeedbackContext'
