@@ -777,10 +777,10 @@
                             class="btn btn-sm btn-outline btn-success"
                             :disabled="toolPreferenceLoading === tool.name"
                           >
-                            Enable
+                            <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
+                            <span v-else>Enable</span>
                           </button>
                         </div>
-                        <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
                       </div>
                     </div>
                     <div v-if="tool.input_schema" class="card-actions justify-end mt-4">
@@ -829,7 +829,8 @@
                           class="btn btn-sm btn-outline"
                           :disabled="toolPreferenceLoading === tool.name"
                         >
-                          Include
+                          <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
+                          <span v-else>Include</span>
                         </button>
                       </div>
                     </div>
@@ -2424,9 +2425,11 @@ async function toggleDisabledTool(toolName: string) {
   try {
     const response = await api.setDisabledTools(server.value.name, newList)
     if (response.success) {
-      // Reload server data and tools list to reflect the change
-      await serversStore.fetchServers()
-      server.value = serversStore.servers.find(s => s.name === props.serverName) || null
+      // Optimistically update local server state instead of refetching
+      // to avoid race condition with fetchServers() stale data
+      if (server.value) {
+        server.value.disabled_tools = newList
+      }
       await loadTools()
       await loadToolPreferences()
       systemStore.addToast({

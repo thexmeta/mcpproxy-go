@@ -571,3 +571,174 @@ func (m *mockRuntime) TriggerOAuthLogout(serverName string) error {
 func (m *mockRuntime) RefreshOAuthToken(serverName string) error {
 	return nil
 }
+
+// Tests for PatchServerConfig disabled_tools flow (mcpproxy-go-807 / mcpproxy-go-37f)
+
+func TestService_PatchServerConfig_DisableTools(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	cfg := &config.Config{
+		Servers: []*config.ServerConfig{
+			{
+				Name:          "test-server",
+				Command:       "echo",
+				Protocol:      "stdio",
+				Enabled:       true,
+				DisabledTools: []string{},
+			},
+		},
+	}
+
+	svc := &ServiceImpl{
+		config: cfg,
+		logger: logger.Sugar(),
+		runtime: &mockRuntime{},
+	}
+
+	err := svc.PatchServerConfig(nil, "test-server", map[string]interface{}{
+		"disabled_tools": []interface{}{"tool_a", "tool_b"},
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify the config was updated
+	server := cfg.Servers[0]
+	if len(server.DisabledTools) != 2 {
+		t.Fatalf("Expected 2 disabled tools, got %d", len(server.DisabledTools))
+	}
+	if server.DisabledTools[0] != "tool_a" || server.DisabledTools[1] != "tool_b" {
+		t.Errorf("Expected [tool_a, tool_b], got %v", server.DisabledTools)
+	}
+}
+
+func TestService_PatchServerConfig_DisableTools_EmptyList(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	cfg := &config.Config{
+		Servers: []*config.ServerConfig{
+			{
+				Name:          "test-server",
+				Command:       "echo",
+				Protocol:      "stdio",
+				Enabled:       true,
+				DisabledTools: []string{"old_tool"},
+			},
+		},
+	}
+
+	svc := &ServiceImpl{
+		config: cfg,
+		logger: logger.Sugar(),
+		runtime: &mockRuntime{},
+	}
+
+	err := svc.PatchServerConfig(nil, "test-server", map[string]interface{}{
+		"disabled_tools": []interface{}{},
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	server := cfg.Servers[0]
+	if len(server.DisabledTools) != 0 {
+		t.Errorf("Expected 0 disabled tools after clearing, got %d", len(server.DisabledTools))
+	}
+}
+
+func TestService_PatchServerConfig_DisableTools_StringSlice(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	cfg := &config.Config{
+		Servers: []*config.ServerConfig{
+			{
+				Name:          "test-server",
+				Command:       "echo",
+				Protocol:      "stdio",
+				Enabled:       true,
+				DisabledTools: []string{},
+			},
+		},
+	}
+
+	svc := &ServiceImpl{
+		config: cfg,
+		logger: logger.Sugar(),
+		runtime: &mockRuntime{},
+	}
+
+	// Test with []string instead of []interface{}
+	err := svc.PatchServerConfig(nil, "test-server", map[string]interface{}{
+		"disabled_tools": []string{"tool_x"},
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	server := cfg.Servers[0]
+	if len(server.DisabledTools) != 1 || server.DisabledTools[0] != "tool_x" {
+		t.Errorf("Expected [tool_x], got %v", server.DisabledTools)
+	}
+}
+
+func TestService_PatchServerConfig_ExcludeDisabledTools(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	cfg := &config.Config{
+		Servers: []*config.ServerConfig{
+			{
+				Name:          "test-server",
+				Command:       "echo",
+				Protocol:      "stdio",
+				Enabled:       true,
+				ExcludeDisabledTools: false,
+			},
+		},
+	}
+
+	svc := &ServiceImpl{
+		config: cfg,
+		logger: logger.Sugar(),
+		runtime: &mockRuntime{},
+	}
+
+	err := svc.PatchServerConfig(nil, "test-server", map[string]interface{}{
+		"exclude_disabled_tools": true,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	server := cfg.Servers[0]
+	if !server.ExcludeDisabledTools {
+		t.Errorf("Expected ExcludeDisabledTools to be true, got false")
+	}
+}
+
+func TestService_PatchServerConfig_ServerNotFound(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	cfg := &config.Config{
+		Servers: []*config.ServerConfig{
+			{
+				Name:     "other-server",
+				Command:  "echo",
+				Protocol: "stdio",
+				Enabled:  true,
+			},
+		},
+	}
+
+	svc := &ServiceImpl{
+		config: cfg,
+		logger: logger.Sugar(),
+		runtime: &mockRuntime{},
+	}
+
+	err := svc.PatchServerConfig(nil, "nonexistent", map[string]interface{}{
+		"disabled_tools": []interface{}{"tool_a"},
+	})
+	if err == nil {
+		t.Fatal("Expected error for nonexistent server, got nil")
+	}
+}
