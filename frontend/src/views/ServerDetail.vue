@@ -655,12 +655,13 @@
               </div>
             </div>
 
-            <div class="flex justify-between items-center">
+            <!-- Enabled Tools Section -->
+            <div class="flex justify-between items-center mb-4">
               <div>
-                <h3 class="text-lg font-semibold">Available Tools</h3>
-                <p class="text-base-content/70">
-                  Tools provided by {{ server.name }}
-                </p>
+                <h3 class="text-lg font-semibold text-success">
+                  Enabled Tools ({{ filteredTools.filter(t => isToolEnabled(t.name)).length }})
+                </h3>
+                <p class="text-base-content/70">Tools provided by {{ server.name }}</p>
               </div>
               <div class="form-control">
                 <input
@@ -672,8 +673,68 @@
               </div>
             </div>
 
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div
+                v-for="tool in filteredTools"
+                :key="tool.name"
+                class="card bg-base-100 shadow-md"
+              >
+                <div class="card-body">
+                  <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2">
+                        <h4 class="card-title text-lg">{{ tool.name }}</h4>
+                        <span class="badge badge-success badge-sm">enabled</span>
+                      </div>
+                      <p class="text-sm text-base-content/70 mt-1">
+                        {{ tool.description || 'No description available' }}
+                      </p>
+                      <AnnotationBadges
+                        v-if="tool.annotations"
+                        :annotations="tool.annotations"
+                        class="mt-2"
+                      />
+                    </div>
+                    <div class="flex flex-col items-end gap-2 ml-4">
+                      <div class="flex items-center gap-2">
+                        <button
+                          class="btn btn-ghost btn-xs"
+                          @click="openEditTool(tool)"
+                          title="Edit tool name and description"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <div class="form-control">
+                          <label class="label cursor-pointer gap-2 py-0">
+                            <span class="label-text text-xs">Enabled</span>
+                            <input
+                              type="checkbox"
+                              checked
+                              disabled
+                              class="toggle toggle-sm toggle-success"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
+                    </div>
+                  </div>
+                  <div v-if="tool.input_schema" class="card-actions justify-end mt-4">
+                    <button
+                      class="btn btn-sm btn-outline"
+                      @click="viewToolSchema(tool)"
+                    >
+                      View Schema
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Disabled Tools Section -->
-            <div v-if="filteredDisabledTools.length > 0" class="mt-6">
+            <div v-if="filteredDisabledTools.length > 0" class="mt-8">
               <div class="flex items-center justify-between mb-3">
                 <div>
                   <h3 class="text-lg font-semibold text-warning">
@@ -740,7 +801,7 @@
             </div>
 
             <!-- Excluded Tools (via exclude_disabled_tools) -->
-            <div v-if="excludedToolsList.length > 0" class="mt-6">
+            <div v-if="excludedToolsList.length > 0" class="mt-8">
               <div class="flex items-center justify-between mb-3">
                 <div>
                   <h3 class="text-lg font-semibold text-base-content/60">
@@ -774,107 +835,8 @@
                         >
                           Include
                         </button>
-                        <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div
-                v-for="tool in filteredTools"
-                :key="tool.name"
-                class="card bg-base-100 shadow-md"
-                :class="{ 'opacity-50': !isToolEnabled(tool.name) }"
-              >
-                <div class="card-body">
-                  <div class="flex items-center gap-2">
-                    <h4 class="card-title text-lg">{{ tool.name }}</h4>
-                    <span
-                      v-if="getToolApprovalStatus(tool.name) === 'pending'"
-                      class="badge badge-info badge-sm"
-                      >new</span
-                    >
-                    <span
-                      v-else-if="getToolApprovalStatus(tool.name) === 'changed'"
-                      class="badge badge-warning badge-sm"
-                      >changed</span
-                    >
-                  </div>
-                  <p class="text-sm text-base-content/70">
-                    {{ tool.description || "No description available" }}
-                  </p>
-                  <AnnotationBadges
-                    v-if="tool.annotations"
-                    :annotations="tool.annotations"
-                    class="mt-2"
-                  />
-                  <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                      <h4 class="card-title text-lg">{{ tool.name }}</h4>
-                      <p class="text-sm text-base-content/70">
-                        {{ tool.description || "No description available" }}
-                      </p>
-                      <AnnotationBadges
-                        v-if="tool.annotations"
-                        :annotations="tool.annotations"
-                        class="mt-2"
-                      />
-                    </div>
-                    <div class="flex flex-col items-end gap-2 ml-4">
-                      <div class="flex items-center gap-2">
-                        <button
-                          class="btn btn-ghost btn-xs"
-                          @click="openEditTool(tool)"
-                          title="Edit tool name and description"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
-                        </button>
-                        <div class="form-control">
-                          <label class="label cursor-pointer gap-2 py-0">
-                            <span class="label-text text-xs">{{
-                              isToolEnabled(tool.name) ? "Enabled" : "Disabled"
-                            }}</span>
-                            <input
-                              type="checkbox"
-                              :checked="isToolEnabled(tool.name)"
-                              @change="toggleToolEnabled(tool.name)"
-                              class="toggle toggle-sm"
-                              :disabled="toolPreferenceLoading === tool.name"
-                            />
-                          </label>
-                        </div>
-                      </div>
-                      <span
-                        v-if="toolPreferenceLoading === tool.name"
-                        class="loading loading-spinner loading-xs"
-                      ></span>
-                    </div>
-                  </div>
-                  <div
-                    v-if="tool.input_schema"
-                    class="card-actions justify-end mt-4"
-                  >
-                    <button
-                      class="btn btn-sm btn-outline"
-                      @click="viewToolSchema(tool)"
-                    >
-                      View Schema
-                    </button>
                   </div>
                 </div>
               </div>
