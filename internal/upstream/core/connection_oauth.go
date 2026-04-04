@@ -869,6 +869,7 @@ func (c *Client) isOAuthError(err error) bool {
 		"access_denied",
 		"unauthorized",
 		"401", // HTTP 401 Unauthorized
+		"404", // HTTP 404 Not Found (endpoint may not exist)
 		"Missing or invalid access token",
 		"OAuth authentication failed",
 		"oauth timeout",

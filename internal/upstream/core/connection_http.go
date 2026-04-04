@@ -264,7 +264,9 @@ func (c *Client) isAuthError(err error) bool {
 
 	errStr := err.Error()
 	return containsAny(errStr, []string{
+		"401", "Unauthorized",
 		"403", "Forbidden",
+		"404", "Not Found",
 		"authentication", "auth",
 	})
 }
