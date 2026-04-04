@@ -184,6 +184,8 @@ type RuntimeOperations interface {
 	UpdateServerDisabledTools(serverName string, disabledTools []string) error
 	// SaveConfiguration persists the runtime configuration to disk
 	SaveConfiguration() error
+	// StorageManager provides access to storage for syncing config changes
+	StorageManager() *storage.Manager
 }
 
 // StorageOperations defines the interface for storage operations needed by the service.
@@ -942,6 +944,41 @@ func (s *ServiceImpl) GetAllServerTools(ctx context.Context, name string) ([]map
 	return tools, nil
 }
 
+// syncServerToStorage updates storage (database) to match the config file changes.
+// This keeps the database in sync with the config file during live updates.
+func (s *ServiceImpl) syncServerToStorage(name string, patch map[string]interface{}) error {
+	if s.runtime.StorageManager == nil {
+		return fmt.Errorf("storage manager not available")
+	}
+
+	storageCfg, err := s.runtime.StorageManager().GetUpstreamServer(name)
+	if err != nil || storageCfg == nil {
+		return fmt.Errorf("server not found in storage: %s", name)
+	}
+
+	// Apply same patch fields that were applied to config file
+	if excludeDisabledTools, ok := patch["exclude_disabled_tools"].(bool); ok {
+		storageCfg.ExcludeDisabledTools = excludeDisabledTools
+	}
+	if disabledTools, ok := patch["disabled_tools"].([]interface{}); ok {
+		var tools []string
+		for _, t := range disabledTools {
+			if toolName, ok := t.(string); ok {
+				tools = append(tools, toolName)
+			}
+		}
+		storageCfg.DisabledTools = tools
+	} else if disabledTools, ok := patch["disabled_tools"].([]string); ok {
+		storageCfg.DisabledTools = disabledTools
+	}
+
+	if err := s.runtime.StorageManager().SaveUpstreamServer(storageCfg); err != nil {
+		return fmt.Errorf("failed to save server to storage: %w", err)
+	}
+
+	return nil
+}
+
 // PatchServerConfig updates specific fields of a server's configuration.
 // Supports updating exclude_disabled_tools and other server-level settings.
 func (s *ServiceImpl) PatchServerConfig(ctx context.Context, name string, patch map[string]interface{}) error {
@@ -1026,7 +1063,14 @@ func (s *ServiceImpl) PatchServerConfig(ctx context.Context, name string, patch 
 		return fmt.Errorf("server not found: %s", name)
 	}
 
-	// Save the configuration
+	// Update storage (database) to keep config and DB in sync
+	// This ensures tools disabled in config file are also reflected in the database
+	if err := s.syncServerToStorage(name, patch); err != nil {
+		s.logger.Warn("Failed to sync server config to storage",
+			zap.String("server", name), zap.Error(err))
+	}
+
+	// Save the configuration to file
 	if err := s.runtime.SaveConfiguration(); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}

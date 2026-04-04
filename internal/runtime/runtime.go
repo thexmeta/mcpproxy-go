@@ -2339,6 +2339,24 @@ func (r *Runtime) UpdateServerDisabledTools(serverName string, disabledTools []s
 		return fmt.Errorf("server not found: %s", serverName)
 	}
 
+	// Update storage (database) to keep config and DB in sync
+	if r.storageManager != nil {
+		storageCfg, err := r.storageManager.GetUpstreamServer(serverName)
+		if err != nil || storageCfg == nil {
+			r.logger.Warn("Server not found in storage, skipping storage update",
+				zap.String("server", serverName))
+		} else {
+			storageCfg.DisabledTools = disabledTools
+			if err := r.storageManager.SaveUpstreamServer(storageCfg); err != nil {
+				r.logger.Error("Failed to save disabled tools to storage",
+					zap.String("server", serverName), zap.Error(err))
+			} else {
+				r.logger.Debug("Saved disabled tools to storage",
+					zap.String("server", serverName), zap.Strings("tools", disabledTools))
+			}
+		}
+	}
+
 	return nil
 }
 
