@@ -77,7 +77,7 @@
         <div class="text-sm space-y-1 mt-1">
           <div v-for="entry in serversWithPendingTools.slice(0, 5)" :key="entry.serverName" class="flex items-center gap-2">
             <span class="text-warning">&#9679;</span>
-            <router-link :to="`/servers/${entry.serverName}`" class="font-medium link link-hover">{{ entry.serverName }}</router-link>
+            <router-link :to="`/servers/${entry.serverName}?tab=tools`" class="font-medium link link-hover">{{ entry.serverName }}</router-link>
             <span class="opacity-70">{{ entry.count }} tool{{ entry.count !== 1 ? 's' : '' }} pending</span>
           </div>
           <div v-if="serversWithPendingTools.length > 5" class="text-xs opacity-60">
@@ -85,8 +85,11 @@
           </div>
         </div>
       </div>
-      <router-link to="/servers" class="btn btn-sm">
+      <router-link v-if="serversWithPendingTools.length > 0" :to="`/servers/${serversWithPendingTools[0].serverName}?tab=tools`" class="btn btn-sm btn-warning">
         Review Tools
+      </router-link>
+      <router-link v-else to="/servers" class="btn btn-sm">
+        Manage Servers
       </router-link>
     </div>
 

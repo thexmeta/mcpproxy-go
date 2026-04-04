@@ -2994,6 +2994,18 @@ onMounted(() => {
   })
 })
 
+// Watch for tab changes in URL
+watch(() => route.query.tab, (newTab) => {
+  const tab = newTab as string
+  if (tab && ['tools', 'logs', 'config', 'security'].includes(tab)) {
+    activeTab.value = tab as typeof activeTab.value
+    if (tab === 'security') {
+      loadScannerNames()
+      loadScanReport()
+    }
+  }
+})
+
 // Cleanup polling on unmount
 onUnmounted(() => {
   stopScanPolling()
