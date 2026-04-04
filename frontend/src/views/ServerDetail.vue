@@ -706,19 +706,15 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <div class="form-control">
-                          <label class="label cursor-pointer gap-2 py-0">
-                            <span class="label-text text-xs">Enabled</span>
-                            <input
-                              type="checkbox"
-                              checked
-                              disabled
-                              class="toggle toggle-sm toggle-success"
-                            />
-                          </label>
-                        </div>
+                        <button
+                          @click="toggleToolEnabled(tool.name)"
+                          class="btn btn-sm btn-outline btn-error"
+                          :disabled="toolPreferenceLoading === tool.name"
+                        >
+                          <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
+                          <span v-else>Disable</span>
+                        </button>
                       </div>
-                      <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
                     </div>
                   </div>
                   <div v-if="tool.input_schema" class="card-actions justify-end mt-4">
@@ -2149,13 +2145,9 @@ async function toggleToolEnabled(toolName: string) {
   try {
     const response = await api.updateToolPreference(server.value.name, toolName, newEnabled)
     if (response.success) {
-      toolPreferences.value[toolName] = {
-        tool_name: toolName,
-        server_name: server.value.name,
-        enabled: newEnabled,
-        created_at: response.data?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
+      // Reload tools and preferences to reflect the change
+      await loadTools()
+      await loadToolPreferences()
       systemStore.addToast({
         type: 'success',
         title: 'Tool Updated',
@@ -2432,10 +2424,11 @@ async function toggleDisabledTool(toolName: string) {
   try {
     const response = await api.setDisabledTools(server.value.name, newList)
     if (response.success) {
-      // Update local state
-      server.value.disabled_tools = newList
+      // Reload server data and tools list to reflect the change
       await serversStore.fetchServers()
       server.value = serversStore.servers.find(s => s.name === props.serverName) || null
+      await loadTools()
+      await loadToolPreferences()
       systemStore.addToast({
         type: 'success',
         title: 'Tool Updated',
