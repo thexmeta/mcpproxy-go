@@ -565,6 +565,11 @@ func (s *Server) setupRoutes() {
 			r.Post("/security/approve", s.handleSecurityApprove)
 			r.Post("/security/reject", s.handleSecurityReject)
 			r.Get("/integrity", s.handleCheckIntegrity)
+
+			// Tool preferences
+			r.Get("/tools/preferences", s.handleGetToolPreferences)
+			r.Put("/tools/preferences/{tool}", s.handleUpdateToolPreference)
+			r.Delete("/tools/preferences/{tool}", s.handleDeleteToolPreference)
 		})
 
 		// Search
@@ -4153,6 +4158,108 @@ func (s *Server) handleExportToolDescriptions(w http.ResponseWriter, r *http.Req
 		"server_name": serverID,
 		"tools":       exports,
 		"count":       len(exports),
+	})
+}
+
+// handleGetToolPreferences handles GET /api/v1/servers/{id}/tools/preferences
+func (s *Server) handleGetToolPreferences(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if serverID == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error)
+	})
+	if !ok {
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	prefs, err := mgmtSvc.GetToolPreferences(r.Context(), serverID)
+	if err != nil {
+		s.logger.Error("Failed to get tool preferences", "server", serverID, "error", err)
+		if strings.Contains(err.Error(), "not found") {
+			s.writeError(w, r, http.StatusNotFound, err.Error())
+			return
+		}
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to get preferences: %v", err))
+		return
+	}
+
+	s.writeSuccess(w, map[string]interface{}{
+		"preferences": prefs,
+	})
+}
+
+// handleUpdateToolPreference handles PUT /api/v1/servers/{id}/tools/preferences/{tool}
+func (s *Server) handleUpdateToolPreference(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	toolName := chi.URLParam(r, "tool")
+	if serverID == "" || toolName == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID and tool name required")
+		return
+	}
+
+	var pref contracts.ToolPreference
+	if err := json.NewDecoder(r.Body).Decode(&pref); err != nil {
+		s.writeError(w, r, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		UpdateToolPreference(ctx context.Context, serverName, toolName string, pref *contracts.ToolPreference) error
+	})
+	if !ok {
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	if err := mgmtSvc.UpdateToolPreference(r.Context(), serverID, toolName, &pref); err != nil {
+		s.logger.Error("Failed to update tool preference", "server", serverID, "tool", toolName, "error", err)
+		if strings.Contains(err.Error(), "not found") {
+			s.writeError(w, r, http.StatusNotFound, err.Error())
+			return
+		}
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update preference: %v", err))
+		return
+	}
+
+	s.writeSuccess(w, map[string]interface{}{
+		"message": fmt.Sprintf("Tool '%s' preference updated for server %s", toolName, serverID),
+	})
+}
+
+// handleDeleteToolPreference handles DELETE /api/v1/servers/{id}/tools/preferences/{tool}
+func (s *Server) handleDeleteToolPreference(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	toolName := chi.URLParam(r, "tool")
+	if serverID == "" || toolName == "" {
+		s.writeError(w, r, http.StatusBadRequest, "Server ID and tool name required")
+		return
+	}
+
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		DeleteToolPreference(ctx context.Context, serverName, toolName string) error
+	})
+	if !ok {
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	if err := mgmtSvc.DeleteToolPreference(r.Context(), serverID, toolName); err != nil {
+		s.logger.Error("Failed to delete tool preference", "server", serverID, "tool", toolName, "error", err)
+		if strings.Contains(err.Error(), "not found") {
+			s.writeError(w, r, http.StatusNotFound, err.Error())
+			return
+		}
+		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to delete preference: %v", err))
+		return
+	}
+
+	s.writeSuccess(w, map[string]interface{}{
+		"message": fmt.Sprintf("Tool '%s' preference deleted for server %s", toolName, serverID),
 	})
 }
 
