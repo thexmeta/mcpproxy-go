@@ -1,8 +1,8 @@
 # MCPProxy Deploy Script
-# Copies built binaries to target folder
+# Copies built binaries to target folder and restarts the service
 
 param(
-    [string]$Version = "v0.21.5",
+    [string]$Version = "v0.23.15",
     [string]$TargetPath = "D:\Development\CodeMode\mcpproxy-go"
 )
 
@@ -37,6 +37,35 @@ if (!(Test-Path $TargetPath)) {
     New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
 }
 
+# Stop MCP-Proxy service before copying
+Write-Host ""
+Write-Host "Stopping MCP-Proxy service..." -ForegroundColor Yellow
+$ServiceStopped = $false
+try {
+    $Service = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
+    if ($Service -and $Service.Status -eq "Running") {
+        Stop-Service -Name "MCP-Proxy" -Force -WarningAction SilentlyContinue
+        Start-Sleep -Seconds 3
+        $CheckService = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
+        if ($CheckService.Status -eq "Stopped") {
+            Write-Host "  MCP-Proxy service stopped" -ForegroundColor Green
+            $ServiceStopped = $true
+        } else {
+            Write-Host "  Warning: Service not fully stopped, waiting..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+            $ServiceStopped = $true
+        }
+    } else {
+        Write-Host "  MCP-Proxy service not running or not found, proceeding with copy" -ForegroundColor Yellow
+        $ServiceStopped = $true
+    }
+}
+catch {
+    Write-Host "  Warning: Failed to stop service: $_" -ForegroundColor Yellow
+    Write-Host "  Attempting copy anyway..." -ForegroundColor Yellow
+    $ServiceStopped = $true
+}
+
 # Copy binaries
 Write-Host ""
 Write-Host "Copying binaries to target..." -ForegroundColor Yellow
@@ -46,38 +75,50 @@ $FilesToCopy = @(
     "mcpproxy-tray.exe"
 )
 
+$CopySuccess = 0
+$CopyFailed = 0
+
 foreach ($File in $FilesToCopy) {
     $Source = "$ExtractPath\$File"
     $Dest = "$TargetPath\$File"
 
     if (Test-Path $Source) {
-        Copy-Item -Path $Source -Destination $Dest -Force
-        Write-Host "  Copied: $File" -ForegroundColor Green
+        try {
+            Copy-Item -Path $Source -Destination $Dest -Force
+            Write-Host "  Copied: $File" -ForegroundColor Green
+            $CopySuccess++
+        }
+        catch {
+            Write-Host "  Error: Failed to copy $File - $_" -ForegroundColor Red
+            $CopyFailed++
+        }
     } else {
-        Write-Host "  Warning: $File not found in release" -ForegroundColor Orange
+        Write-Host "  Warning: $File not found in release" -ForegroundColor Yellow
     }
 }
 
-# Restart MCP-Proxy service
-Write-Host ""
-Write-Host "Restarting MCP-Proxy service..." -ForegroundColor Yellow
-try {
-    $Service = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
-    if ($Service) {
-        Write-Host "  Stopping MCP-Proxy service..." -ForegroundColor Yellow
-        Stop-Service -Name "MCP-Proxy" -Force -WarningAction SilentlyContinue
-        Start-Sleep -Seconds 2
-        Write-Host "  Starting MCP-Proxy service..." -ForegroundColor Yellow
-        Start-Service -Name "MCP-Proxy"
-        Start-Sleep -Seconds 2
-        $ServiceStatus = Get-Service -Name "MCP-Proxy"
-        Write-Host "  Service status: $($ServiceStatus.Status)" -ForegroundColor Green
-    } else {
-        Write-Host "  MCP-Proxy service not found, skipping restart" -ForegroundColor Orange
-    }
+if ($CopyFailed -gt 0) {
+    Write-Host ""
+    Write-Host "Warning: $CopyFailed file(s) failed to copy" -ForegroundColor Red
 }
-catch {
-    Write-Host "  Warning: Failed to restart service: $_" -ForegroundColor Orange
+
+# Restart MCP-Proxy service
+if ($ServiceStopped) {
+    Write-Host ""
+    Write-Host "Starting MCP-Proxy service..." -ForegroundColor Yellow
+    try {
+        Start-Service -Name "MCP-Proxy" -WarningAction SilentlyContinue
+        Start-Sleep -Seconds 3
+        $ServiceStatus = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
+        if ($ServiceStatus) {
+            Write-Host "  Service status: $($ServiceStatus.Status)" -ForegroundColor Green
+        } else {
+            Write-Host "  MCP-Proxy service not found" -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "  Warning: Failed to start service: $_" -ForegroundColor Yellow
+    }
 }
 
 # Cleanup
@@ -88,6 +129,7 @@ Remove-Item -Recurse -Force $ExtractPath
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Deploy Complete!" -ForegroundColor Green
+Write-Host "  Copied: $CopySuccess | Failed: $CopyFailed" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 
 Write-Host ""
