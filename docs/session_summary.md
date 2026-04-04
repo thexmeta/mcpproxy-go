@@ -1,135 +1,130 @@
-# Session Summary - Tool Management Feature Development
+# Session Summary - 2026-04-04
 
-**Date:** 2026-03-15  
-**Session Duration:** ~2 hours  
-**Developer:** AI Assistant (Qwen Code)
+## Session Overview
+**Date:** 2026-04-04
+**Status:** Completed
+**Releases:** v0.23.12 → v0.23.15 (4 releases)
+
+---
 
 ## Key Achievements
 
-### 🔧 OAuth Authentication Bug Fix
-- **Problem:** GitHub Copilot MCP server OAuth tokens weren't being persisted to the BBolt database
-- **Root Cause:** `GetOAuthHandler()` was being called from the error object instead of the configured client, causing the TokenStore to be unavailable during token exchange
-- **Fix Applied:** Modified `internal/upstream/core/connection_oauth.go` to use `c.GetOAuthHandler()` (from configured client) instead of `client.GetOAuthHandler(authErr)` (from error)
-- **Locations Fixed:** 3 occurrences in `connection_oauth.go` (lines ~964, ~1357, ~1878)
-- **Status:** ✅ Code fix implemented and compiled successfully
+### 1. Fix HTTP 404 Error Detection ✅
+**Release:** v0.23.12
+- Added "404", "Not Found" to `isAuthError()` checks
+- Added "404" to `isOAuthError()` checks
+- Files: `internal/upstream/core/connection_http.go`, `connection_oauth.go`
 
-### 🔐 OAuth Configuration Resolution
-- **Issue:** Windows UTF-8 BOM causing config parsing failures
-- **Resolution:** Created Python scripts to remove BOM from `mcp_config.json`
-- **Working Config:** GitHub Copilot MCP with static OAuth credentials via keyring:
-  ```json
-  {
-    "name": "Github",
-    "url": "https://api.githubcopilot.com/mcp/",
-    "protocol": "streamable-http",
-    "env": {
-      "GITHUB_TOKEN": "${keyring:github_token}"
-    },
-    "oauth": {
-      "client_id": "${keyring:github_client_id}",
-      "client_secret": "${keyring:github_client_secret}"
-    },
-    "enabled": true
-  }
-  ```
+### 2. Restart Button (Per-Server) ✅
+**Release:** v0.23.2
+- Added restart button to each server card in Servers page
+- Located between Logout and Details buttons
+- Uses existing `/api/v1/servers/{id}/restart` endpoint
 
-### 📝 Documentation Updates
-- **QWEN.md Updated:**
-  - Added Tool Management CLI commands section
-  - Documented OAuth bug fix in Key Features
-  - Added GitHub Copilot MCP configuration example
-  - Added setup commands for OAuth secrets
+### 3. Proxy-Wide Restart Buttons ✅
+**Releases:** v0.23.8 → v0.23.11
+- Soft Restart: Restarts all MCP servers (management.RestartAll)
+- Hard Restart: Full process restart with Windows process detachment
+- UI: Two buttons in Configuration page (yellow Soft, red Hard)
+- Tray support for exit code 100
 
-### 🎯 Tool Management Feature (Planned)
-**Features to Implement:**
-1. **Per-server tool enable/disable**
-   - CLI: `mcpproxy tools enable/disable/toggle <server> <tool>`
-   - API: `POST /api/v1/servers/{name}/tools/{tool}/enable`
-   - Web UI: Toggle switches in server details page
+### 4. Disable Telemetry by Default ✅
+**Release:** v0.23.9
+- `IsTelemetryEnabled()` returns false by default
+- No heartbeat data, anonymous ID, or feedback sent
+- Original code preserved in `.disabled` files
 
-2. **Tool renaming**
-   - CLI: `mcpproxy tools rename <server> <old-name> <new-name>`
-   - API: `POST /api/v1/servers/{name}/tools/{tool}/rename`
-   - Use case: Improve AI context, clarify ambiguous tool names
+### 5. Review Tools Navigation Fix ✅
+**Release:** v0.23.15
+- "Review Tools" button now navigates to first server with pending tools
+- Server Detail page reads `?tab=` query parameter
+- Dashboard pending tools links include `?tab=tools`
+- Direct path from Dashboard → Server Detail → Tools tab
 
-3. **Bulk operations**
-   - `mcpproxy tools disable-all <server> --except=tool1,tool2`
-   - `mcpproxy tools enable-all <server>`
+---
 
-4. **Tool usage statistics**
-   - Track call counts, error rates, average execution time
-   - CLI: `mcpproxy tools stats <server>`
+## Unresolved Issues (Next Session)
 
-## Current State
+### 1. 404 Errors from Upstream Servers
+**Status:** Not fixed (upstream server issue)
+- HTTP 404 errors from Avalonia, Serena, and other MCP servers
+- Root cause: Wrong server URLs or migrated endpoints
+- NOT an mcpproxy code issue
+- Action: User needs to verify/update server URLs in config
 
-### ✅ Completed
-- OAuth bug fix implemented in `connection_oauth.go`
-- QWEN.md documentation updated
-- Config BOM issue resolved
-- GitHub Copilot MCP working with static OAuth credentials
+### 2. Timeout Errors for stdio Servers
+**Status:** Not fixed (upstream server issue)
+- "context deadline exceeded" for Avalonia and Serena
+- Root cause: MCP server process not responding to initialize()
+- Possible causes: Not installed, crashing, missing dependencies
+- Action: User needs to run server commands manually to debug
 
-### ⏳ In Progress
-- Tool management feature design (this session)
+### 3. Tools Not Showing in Server Detail
+**Status:** Partially fixed (UI navigation fixed)
+- UI now correctly navigates to Tools tab
+- Tools tab shows quarantined tools with approve buttons
+- If server returns 404, no tools are discovered (upstream issue)
+- If tools are quarantined, they must be approved first
 
-### 📋 Next Session Tasks
-1. Implement backend API endpoints for tool management
-2. Add CLI commands for tool operations
-3. Create Web UI for visual tool management
-4. Add database schema for tool preferences
-5. Write unit and E2E tests
+---
 
-## Active State
+## Releases Built & Deployed
 
-### File Locations
-- **Project Root:** `E:\Projects\Go\mcpproxy-go`
-- **Config:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
-- **Database:** `C:\Users\eserk\.mcpproxy\config.db`
-- **Logs:** `C:\Users\eserk\AppData\Local\mcpproxy\logs\`
+| Version | Changes | Status |
+|---------|---------|--------|
+| v0.23.12 | 404 error detection | ✅ Deployed |
+| v0.23.13 | Quarantine disabled (reverted) | ✅ Deployed |
+| v0.23.14 | Quarantine reverted to enabled | ✅ Deployed |
+| v0.23.15 | Review Tools navigation | ✅ Deployed |
 
-### Modified Files
-- `internal/upstream/core/connection_oauth.go` - OAuth handler fix
-- `QWEN.md` - Documentation updates
-- `C:\Users\eserk\.mcpproxy\mcp_config.json` - OAuth config (BOM removed)
+---
 
-### Helper Scripts Created (Can be deleted)
-- `E:\Projects\Go\mcpproxy-go\update-github-oauth.py`
-- `E:\Projects\Go\mcpproxy-go\update-github-oauth.ps1`
-- `E:\Projects\Go\mcpproxy-go\fix-github-server.py`
-- `E:\Projects\Go\mcpproxy-go\fix-bom.py`
-- `E:\Projects\Go\mcpproxy-go\restore-github-copilot.py`
+## Architecture Changes
 
-## Open Questions for Next Session
+### Tool Quarantine Behavior
+- Default: ENABLED (tools blocked until approved)
+- `IsQuarantineEnabled()` returns true when nil
+- Users must approve tools before they appear in tool list
+- Can be disabled per-server with `skip_quarantine: true`
 
-1. **Tool Renaming Strategy:**
-   - Should renamed tools be stored in config or database?
-   - How to handle tool name conflicts?
-   - Should the original tool name be preserved for MCP protocol?
-
-2. **Enable/Disable Implementation:**
-   - Filter tools at the MCP protocol layer or at the API/Web UI layer?
-   - Should disabled tools be hidden or return "disabled" error?
-
-3. **Web UI Design:**
-   - New "Tools" tab per server?
-   - Inline editing in server list?
-   - Bulk selection UI pattern?
-
-## Scratchpad
-
-### Useful Commands Developed
-```bash
-# Remove BOM from config
-python -c "import json; f=open(r'config.json','r',encoding='utf-8-sig'); c=json.load(f); f.close(); f2=open(r'config.json','w',encoding='utf-8'); json.dump(c,f2,indent=2); f2.close()"
-
-# Restart tray after config changes
-taskkill /F /IM mcpproxy.exe /IM mcpproxy-tray.exe & timeout 2 & start mcpproxy-tray.exe
-
-# Check server status
-mcpproxy upstream list --json | python -c "import sys,json; data=json.load(sys.stdin); gh=[s for s in data if s['name']=='Github'][0]; print(json.dumps(gh, indent=2))"
+### Restart Architecture
+```
+Soft Restart: management.RestartAll() → MCP servers restart
+Hard Restart (Tray): os.Exit(100) → Tray detects → Launches new core
+Hard Restart (Standalone): exec.Command(exe, args...) → Detached process
 ```
 
-### OAuth Debugging Insights
-- The mcp-go library's `ProcessAuthorizationResponse` expects TokenStore to be set in OAuthConfig
-- `client.GetOAuthHandler(authErr)` extracts handler from error - doesn't have TokenStore
-- `c.GetOAuthHandler()` gets handler from configured client - has TokenStore
-- Windows keyring works but requires proper secret names
+### Navigation Flow
+```
+Dashboard → "Review Tools" → /servers/{firstServer}?tab=tools
+Dashboard → Server name → /servers/{serverName}?tab=tools
+Server Detail → Reads ?tab= query param → Auto-selects tab
+```
+
+---
+
+## Files Modified This Session
+
+**Backend:**
+- `internal/config/config.go` - Quarantine default
+- `internal/upstream/core/connection_http.go` - 404 detection
+- `internal/upstream/core/connection_oauth.go` - 404 detection, OAuth handler
+- `internal/server/server.go` - RequestRestart(), RequestHardRestart()
+- `internal/httpapi/server.go` - /restart, /restart/hard endpoints
+
+**Frontend:**
+- `frontend/src/views/Dashboard.vue` - Review Tools button
+- `frontend/src/views/ServerDetail.vue` - Tab query parameter
+- `frontend/src/views/Settings.vue` - Soft/Hard restart buttons
+- `frontend/src/services/api.ts` - restartProxyHard()
+
+**Tray:**
+- `cmd/mcpproxy-tray/main.go` - MCPPROXY_TRAY_PARENT env var
+- `cmd/mcpproxy-tray/internal/monitor/process.go` - Exit code 100
+- `cmd/mcpproxy-tray/internal/state/states.go` - EventCoreRestart
+- `cmd/mcpproxy-tray/internal/state/machine.go` - State transition
+
+---
+
+## Deployment Target
+📁 `D:\Development\CodeMode\mcpproxy-go\`

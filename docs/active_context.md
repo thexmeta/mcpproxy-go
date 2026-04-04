@@ -1,146 +1,110 @@
 # Active Context - MCPProxy-Go
 
-**Last Updated:** 2026-04-03
-**Current Focus:** Hard Restart Feature - COMPLETE ✅
+**Last Updated:** 2026-04-04
+**Current Focus:** UI Navigation Fixed - Upstream Server Issues Pending Investigation
 
 ## Current State
 
-### ✅ Completed This Session (2026-04-03)
+### ✅ Completed This Session (2026-04-04)
 
-1. **Disable All Telemetry by Default (v0.23.9)** ✅
-   - Config.IsTelemetryEnabled() returns false by default
-   - No heartbeat data sent
-   - No anonymous ID generated
-   - No feedback submission
-   - Original code preserved in .disabled files
+1. **HTTP 404 Error Detection (v0.23.12)** ✅
+   - Added 404 to isAuthError() and isOAuthError() checks
+   - 404 errors now properly caught during connection
 
-2. **Add Hard Restart Feature (v0.23.10)** ✅
-   - RequestHardRestart() in Server layer
-   - POST /api/v1/restart/hard endpoint
-   - Two buttons in Settings UI (Soft/Hard restart)
+2. **Restart Features (v0.23.2 → v0.23.11)** ✅
+   - Per-server restart button on server cards
+   - Soft restart (MCP servers) in Configuration page
+   - Hard restart (full process) in Configuration page
    - Tray support for exit code 100
-   - Proper Windows process detachment
 
-3. **Updated Tray.exe (v0.23.11)** ✅
-   - Both mcpproxy.exe and mcpproxy-tray.exe rebuilt
-   - Tray handles exit code 100 correctly
-   - State machine: EventCoreRestart → StateLaunchingCore
+3. **Telemetry Disabled (v0.23.9)** ✅
+   - Default: DISABLED
+   - No data collection or sending
 
-### 🎯 Next Session Tasks
+4. **UI Navigation Fix (v0.23.15)** ✅
+   - "Review Tools" button navigates to first server with pending tools
+   - Server Detail page reads ?tab= query parameter
+   - Dashboard links include ?tab=tools
 
-**Priority:** Medium
+### ❌ Unresolved Issues
 
-#### Testing
-1. **Hard restart production test** - Verify full process restart works in real environment
-2. **Tray restart verification** - Confirm tray properly restarts core after exit code 100
-3. **Standalone mode test** - Test hard restart with custom config path
+1. **404 HTTP Errors from Upstream Servers**
+   - NOT an mcpproxy bug
+   - Server URLs are wrong or have migrated
+   - User needs to verify URLs in config
 
-#### Enhancements
-1. **Telemetry toggle UI** - Add enable/disable option in Settings page
-2. **Restart confirmation logging** - Log all restart attempts and results
-3. **Restart history/audit log** - Track when restarts occurred
+2. **Timeout Errors for stdio Servers**
+   - NOT an mcpproxy bug
+   - MCP server processes not responding
+   - User needs to run server commands manually
 
-#### Documentation
-1. Add user guide for soft vs hard restart
-2. Document telemetry privacy policy
-3. Update API documentation with /restart/hard endpoint
+3. **Tools Not Showing**
+   - UI navigation fixed
+   - If server 404s, no tools discovered (upstream issue)
+   - If quarantined, must be approved first
 
 ## Active State
 
 ### Running Processes
-- **MCPProxy Tray:** Stopped (ready for restart)
-- **Core Server:** Stopped (ready for restart)
-- **Build Status:** v0.23.11 deployed
+- **MCPProxy Tray:** Stopped
+- **Core Server:** Stopped
 
 ### Database State
 - **Path:** `C:\Users\eserk\.mcpproxy\config.db`
-- **Status:** Active
 - **Config:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
 
-### Build Artifacts
-- **Location:** `releases/v0.23.11/` and `releases/mcpproxy-0.23.11-windows-amd64.zip`
+### Build Status
+- **Latest:** v0.23.15
 - **Deployed:** `D:\Development\CodeMode\mcpproxy-go\`
-
-### API Endpoints
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/restart` | POST | Soft restart (MCP servers) |
-| `/api/v1/restart/hard` | POST | Hard restart (full process) |
 
 ## Open Tasks
 
-### High Priority (Testing)
-- [ ] Hard restart in production environment
-- [ ] Tray restart after exit code 100
-- [ ] Standalone hard restart with custom config
+### High Priority (User Action Required)
+- [ ] Verify upstream server URLs (404 errors)
+- [ ] Test stdio server commands manually (timeout errors)
+- [ ] Check if server endpoints have migrated
 
-### Medium Priority (Enhancements)
-- [ ] Telemetry enable/disable UI toggle
-- [ ] Restart confirmation logging
-- [ ] Restart history/audit log
+### Medium Priority (UI/UX)
+- [ ] Add better error messages for 404 upstream servers
+- [ ] Add troubleshooting guide for common server issues
+- [ ] Add "Test Connection" button for servers
 
-### Low Priority (Documentation)
-- [ ] User guide for restart types
-- [ ] Telemetry privacy documentation
-- [ ] API documentation update
+### Low Priority
+- [ ] Add bulk tool approval from Servers list page
+- [ ] Add server health dashboard
+- [ ] Add notification when tools need approval
 
 ## Scratchpad
 
-### Resume Commands
+### Debug Commands
+```powershell
+# Check server config
+Get-Content "C:\Users\eserk\.mcpproxy\mcp_config.json" | ConvertFrom-Json | Select-Object -ExpandProperty mcpServers | Select-Object name, url, command, args
 
-```bash
-# Start tray for testing
-cd D:\Development\CodeMode\mcpproxy-go
-.\mcpproxy-tray.exe
+# Test HTTP server
+curl -v https://your-server-url/mcp
 
-# Start standalone for testing
-.\mcpproxy.exe serve --config "C:\Users\eserk\.mcpproxy\mcp_config.json" --log-level=debug --log-to-file --log-dir "D:\Development\bin\logs"
-
-# Test soft restart
-curl -X POST -H "X-API-Key: YOUR_KEY" http://127.0.0.1:8080/api/v1/restart
-
-# Test hard restart
-curl -X POST -H "X-API-Key: YOUR_KEY" http://127.0.0.1:8080/api/v1/restart/hard
-
-# Check logs for restart messages
-Get-Content "D:\Development\bin\logs\*.log" -Tail 100 | Select-String "RESTART"
+# Check logs for errors
+Get-Content "D:\Development\bin\logs\*.log" -Tail 100 | Select-String "404|timeout|failed"
 ```
 
-### Code Snippets
-
-```go
-// HARD RESTART - Full process restart
-func (s *Server) RequestHardRestart() error {
-    runningUnderTray := os.Getenv("MCPPROXY_TRAY_PARENT") == "1"
-    
-    if runningUnderTray {
-        s.StopServer()
-        os.Exit(100)  // Signal tray to restart
-    }
-    
-    // Standalone: spawn new process
-    cmd := exec.Command(exe, args...)
-    cmd.SysProcAttr = &syscall.SysProcAttr{
-        CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-    }
-    cmd.Start()
-    cmd.Process.Release()
-    time.Sleep(2 * time.Second)
-    s.StopServer()
-    os.Exit(0)
-}
+### Tool Approval Flow
+```
+1. Server connects → Tools discovered
+2. checkToolApprovals() → Tools marked as "pending"
+3. filterBlockedTools() → Pending tools blocked from index
+4. User goes to Server Detail → Tools tab
+5. User sees quarantined tools with "Approve" buttons
+6. User approves → Tools added to index → Available for use
 ```
 
 ### Known Issues
-
-None currently. All builds passing, features verified working.
+- 404 errors are from upstream servers, not mcpproxy
+- Timeout errors are from stdio servers not responding
+- UI navigation is now fixed
+- Quarantine is enabled by default (secure)
 
 ## Related Documentation
-
-- Session Summary: `session_summary_2026-04-03.md`
-- Telemetry: `internal/telemetry/telemetry_disabled.go`
-- Hard Restart: `internal/server/server.go` (RequestHardRestart)
-- HTTP API: `internal/httpapi/server.go` (/restart/hard endpoint)
-- Frontend: `frontend/src/views/Settings.vue` (restart buttons)
-- Tray: `cmd/mcpproxy-tray/internal/monitor/process.go` (exit code 100)
-- State Machine: `cmd/mcpproxy-tray/internal/state/machine.go`
+- Session Summary: `docs/session_summary.md`
+- Architecture: `docs/architecture.md`
+- CLI Commands: `docs/cli-management-commands.md`
