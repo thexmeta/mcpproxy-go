@@ -155,9 +155,9 @@ type Config struct {
 	//      quarantined=false. Explicit per-request values always win.
 	//   2. Tool-level quarantine (Spec 032): per-tool SHA-256 approval of
 	//      tool descriptions/schemas.
-	// When nil (default), quarantine is DISABLED (tools are auto-approved).
-	// Set to explicit true to enable quarantine. Per-server SkipQuarantine
-	// still applies for the tool-level check on individual servers.
+	// When nil (default), quarantine is enabled (secure by default). Set to
+	// explicit false to opt out of both. Per-server SkipQuarantine still
+	// applies for the tool-level check on individual servers.
 	QuarantineEnabled *bool `json:"quarantine_enabled,omitempty" mapstructure:"quarantine-enabled"`
 
 	// Security scanner settings (Spec 039)
@@ -831,12 +831,11 @@ func (s APIKeySource) String() string {
 }
 
 // IsQuarantineEnabled returns whether quarantine (both server-level
-// auto-quarantine and tool-level approval) is enabled.
-// Default is DISABLED (tools are auto-approved) for better UX.
-// Set quarantine_enabled=true in config to enable quarantine.
+// auto-quarantine and tool-level approval) is enabled. Defaults to true
+// (secure by default) when not explicitly set.
 func (c *Config) IsQuarantineEnabled() bool {
 	if c.QuarantineEnabled == nil {
-		return false
+		return true
 	}
 	return *c.QuarantineEnabled
 }
