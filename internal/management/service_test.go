@@ -474,6 +474,11 @@ func (m *mockRuntimeOperations) SaveConfiguration() error {
 	return nil
 }
 
+// StorageManager implements RuntimeOperations for testing
+func (m *mockRuntimeOperations) StorageManager() *storage.Manager {
+	return nil
+}
+
 // T065: Unit test for RestartAll() - verify sequential execution and partial failure handling
 func TestRestartAll(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()

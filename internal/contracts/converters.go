@@ -350,6 +350,11 @@ func ConvertGenericToolsToTyped(genericTools []map[string]interface{}) []Tool {
 		if usage, ok := generic["usage"].(int); ok {
 			tool.Usage = usage
 		}
+		if enabled, ok := generic["enabled"].(bool); ok {
+			tool.Enabled = enabled
+		} else {
+			tool.Enabled = true // Default to enabled if not specified
+		}
 
 		// Extract schema
 		if schema, ok := generic["schema"].(map[string]interface{}); ok {

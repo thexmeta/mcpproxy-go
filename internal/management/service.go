@@ -944,36 +944,34 @@ func (s *ServiceImpl) GetAllServerTools(ctx context.Context, name string) ([]map
 	return tools, nil
 }
 
-// syncServerToStorage updates storage (database) to match the config file changes.
-// This keeps the database in sync with the config file during live updates.
+// syncServerToStorage updates storage (database) to match the config file.
+// It copies the full server config from the in-memory snapshot to storage,
+// ensuring ALL fields stay in sync (not just the patched ones).
 func (s *ServiceImpl) syncServerToStorage(name string, patch map[string]interface{}) error {
 	sm := s.runtime.StorageManager()
 	if sm == nil {
 		return fmt.Errorf("storage manager not available")
 	}
 
-	storageCfg, err := sm.GetUpstreamServer(name)
-	if err != nil || storageCfg == nil {
-		return fmt.Errorf("server not found in storage: %s", name)
+	// Find the server in the current config snapshot (source of truth)
+	cfg := s.config
+	if cfg == nil {
+		return fmt.Errorf("configuration not available")
 	}
 
-	// Apply same patch fields that were applied to config file
-	if excludeDisabledTools, ok := patch["exclude_disabled_tools"].(bool); ok {
-		storageCfg.ExcludeDisabledTools = excludeDisabledTools
-	}
-	if disabledTools, ok := patch["disabled_tools"].([]interface{}); ok {
-		var tools []string
-		for _, t := range disabledTools {
-			if toolName, ok := t.(string); ok {
-				tools = append(tools, toolName)
-			}
+	var serverCfg *config.ServerConfig
+	for _, srv := range cfg.Servers {
+		if srv.Name == name {
+			serverCfg = srv
+			break
 		}
-		storageCfg.DisabledTools = tools
-	} else if disabledTools, ok := patch["disabled_tools"].([]string); ok {
-		storageCfg.DisabledTools = disabledTools
+	}
+	if serverCfg == nil {
+		return fmt.Errorf("server not found in configuration: %s", name)
 	}
 
-	if err := sm.SaveUpstreamServer(storageCfg); err != nil {
+	// Write the full server config to storage — this syncs ALL fields
+	if err := sm.SaveUpstreamServer(serverCfg); err != nil {
 		return fmt.Errorf("failed to save server to storage: %w", err)
 	}
 

@@ -1308,19 +1308,15 @@ func (r *Runtime) ApplyConfig(newCfg *config.Config, cfgPath string) (*ConfigApp
 	return result, nil
 }
 
-// GetConfig returns a copy of the current configuration
+// GetConfig returns a copy of the current configuration.
+// Reads from ConfigSnapshot to ensure consistency with the Supervisor's state.
 func (r *Runtime) GetConfig() (*config.Config, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if r.cfg == nil {
+	snapshot := r.ConfigSnapshot()
+	if snapshot == nil || snapshot.Config == nil {
 		return nil, fmt.Errorf("config not initialized")
 	}
 
-	// Return a deep copy to prevent external modifications
-	// For now, we return the same reference (caller should not modify)
-	// TODO: Implement deep copy if needed
-	return r.cfg, nil
+	return snapshot.Config, nil
 }
 
 // Tokenizer returns the tokenizer instance.
@@ -1952,19 +1948,16 @@ func (r *Runtime) GetServerTools(serverName string) ([]map[string]interface{}, e
 		return []map[string]interface{}{}, nil
 	}
 
-	// Get disabled tools from server config
+	// Get disabled tools from config
 	disabledTools := r.getDisabledToolsFromConfig(serverName)
-
-	// Check if ExcludeDisabledTools is enabled in config
-	excludeDisabled := r.isExcludeDisabledToolsEnabled(serverName)
 
 	// Get tool preferences from storage (for custom names/descriptions)
 	toolPrefs := r.getToolPreferencesFromStorage(serverName)
 
 	tools := make([]map[string]interface{}, 0, len(serverStatus.Tools))
 	for _, tool := range serverStatus.Tools {
-		// Skip disabled tools if excludeDisabled is true
-		if excludeDisabled && disabledTools[tool.Name] {
+		// Always skip disabled tools in this endpoint (enabled tools only)
+		if disabledTools[tool.Name] {
 			continue
 		}
 
@@ -2038,7 +2031,9 @@ func (r *Runtime) GetAllServerTools(serverName string) ([]map[string]interface{}
 		return nil, fmt.Errorf("server not found: %s", serverName)
 	}
 
-	// Get disabled tools from server config
+	// Get disabled tools from the config service (authoritative source, synced with config file)
+	// We use ConfigSnapshot instead of serverStatus.Config because the Supervisor's config
+	// may be stale if it was reconciled before DisabledTools were fully loaded.
 	disabledTools := r.getDisabledToolsFromConfig(serverName)
 
 	// Get tool preferences from storage (for custom names/descriptions)
@@ -2079,23 +2074,34 @@ func (r *Runtime) GetAllServerTools(serverName string) ([]map[string]interface{}
 	return tools, nil
 }
 
-// getDisabledToolsFromConfig returns a map of disabled tool names for a server
+// getDisabledToolsFromConfig returns a map of disabled tool names for a server.
 func (r *Runtime) getDisabledToolsFromConfig(serverName string) map[string]bool {
 	disabledTools := make(map[string]bool)
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if r.cfg == nil {
-		return disabledTools
+	// Read from the config file as the authoritative source
+	if r.cfgPath != "" {
+		if fileCfg, err := config.LoadFromFile(r.cfgPath); err == nil && fileCfg != nil {
+			for _, server := range fileCfg.Servers {
+				if server.Name == serverName {
+					for _, tool := range server.DisabledTools {
+						disabledTools[tool] = true
+					}
+					return disabledTools
+				}
+			}
+		}
 	}
 
-	for _, server := range r.cfg.Servers {
-		if server.Name == serverName {
-			for _, tool := range server.DisabledTools {
-				disabledTools[tool] = true
+	// Fallback: try ConfigSnapshot
+	snapshot := r.ConfigSnapshot()
+	if snapshot != nil && snapshot.Config != nil {
+		for _, server := range snapshot.Config.Servers {
+			if server.Name == serverName {
+				for _, tool := range server.DisabledTools {
+					disabledTools[tool] = true
+				}
+				break
 			}
-			break
 		}
 	}
 
@@ -2327,9 +2333,10 @@ func (r *Runtime) UpdateServerDisabledTools(serverName string, disabledTools []s
 	}
 
 	found := false
-	for _, server := range r.cfg.Servers {
+	for i, server := range r.cfg.Servers {
 		if server.Name == serverName {
-			server.DisabledTools = disabledTools
+			r.cfg.Servers[i].DisabledTools = disabledTools
+			r.cfg.Servers[i].Updated = time.Now()
 			found = true
 			break
 		}
@@ -2337,6 +2344,14 @@ func (r *Runtime) UpdateServerDisabledTools(serverName string, disabledTools []s
 
 	if !found {
 		return fmt.Errorf("server not found: %s", serverName)
+	}
+
+	// Update config service snapshot to keep it in sync
+	if r.configSvc != nil {
+		if err := r.configSvc.Update(r.cfg, configsvc.UpdateTypeModify, "update_disabled_tools"); err != nil {
+			r.logger.Warn("Failed to update config service for disabled tools",
+				zap.String("server", serverName), zap.Error(err))
+		}
 	}
 
 	// Update storage (database) to keep config and DB in sync

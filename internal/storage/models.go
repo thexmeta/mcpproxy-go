@@ -49,7 +49,9 @@ type UpstreamRecord struct {
 	Headers              map[string]string       `json:"headers,omitempty"` // For HTTP authentication
 	OAuth                *config.OAuthConfig     `json:"oauth,omitempty"`   // OAuth configuration
 	Enabled              bool                    `json:"enabled"`
-	Quarantined          bool                    `json:"quarantined"` // Security quarantine status
+	Quarantined          bool                    `json:"quarantined"`       // Security quarantine status
+	SkipQuarantine       bool                    `json:"skip_quarantine"`   // Skip tool-level quarantine for this server
+	Shared               bool                    `json:"shared"`            // Server edition: shared with all users
 	Created              time.Time               `json:"created"`
 	Updated              time.Time               `json:"updated"`
 	Isolation            *config.IsolationConfig `json:"isolation,omitempty"`        // Per-server isolation settings

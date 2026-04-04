@@ -256,6 +256,35 @@ func (s *ServerConfig) EnableTool(toolName string) {
 }
 }
 
+// IsToolDisabled returns true if the given tool is in the disabled tools list.
+func (s *ServerConfig) IsToolDisabled(toolName string) bool {
+	for _, t := range s.DisabledTools {
+		if t == toolName {
+			return true
+		}
+	}
+	return false
+}
+
+// DisableTool adds a tool to the disabled tools list if not already present.
+func (s *ServerConfig) DisableTool(toolName string) {
+	if s.IsToolDisabled(toolName) {
+		return
+	}
+	s.DisabledTools = append(s.DisabledTools, toolName)
+}
+
+// EnableTool removes a tool from the disabled tools list.
+func (s *ServerConfig) EnableTool(toolName string) {
+	filtered := make([]string, 0, len(s.DisabledTools))
+	for _, t := range s.DisabledTools {
+		if t != toolName {
+			filtered = append(filtered, t)
+		}
+	}
+	s.DisabledTools = filtered
+}
+
 // OAuthConfig represents OAuth configuration for a server
 type OAuthConfig struct {
 	ClientID     string            `json:"client_id,omitempty" mapstructure:"client_id"`

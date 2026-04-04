@@ -798,14 +798,10 @@ func (r *Runtime) LoadConfiguredServers(cfg *config.Config) error {
 }
 
 // SaveConfiguration persists the runtime configuration to disk.
+// The config file snapshot is the source of truth for ALL server fields.
+// Both storage (BBolt) and the config file are written to keep them in sync.
 func (r *Runtime) SaveConfiguration() error {
-	latestServers, err := r.storageManager.ListUpstreamServers()
-	if err != nil {
-		r.logger.Error("Failed to get latest server list from storage for saving", zap.Error(err))
-		return err
-	}
-
-	// Get current snapshot (lock-free)
+	// Get current snapshot (lock-free) — this is the source of truth
 	snapshot := r.ConfigSnapshot()
 	if snapshot.Config == nil {
 		return fmt.Errorf("runtime configuration is not available")
@@ -822,34 +818,22 @@ func (r *Runtime) SaveConfiguration() error {
 		return fmt.Errorf("failed to clone configuration")
 	}
 
-	// Merge DisabledTools and ExcludeDisabledTools from in-memory config with servers from storage
-	// Storage may not have these fields, so preserve them from configCopy
-	disabledToolsMap := make(map[string][]string)
-	excludeDisabledToolsMap := make(map[string]bool)
-	for _, srv := range configCopy.Servers {
-		if len(srv.DisabledTools) > 0 {
-			disabledToolsMap[srv.Name] = srv.DisabledTools
-		}
-		// Preserve ExcludeDisabledTools setting
-		excludeDisabledToolsMap[srv.Name] = srv.ExcludeDisabledTools
-	}
-
-	// Update servers with latest from storage
-	for i := range latestServers {
-		if tools, ok := disabledToolsMap[latestServers[i].Name]; ok {
-			latestServers[i].DisabledTools = tools
-		}
-		// Apply ExcludeDisabledTools from in-memory config
-		if exclude, ok := excludeDisabledToolsMap[latestServers[i].Name]; ok {
-			latestServers[i].ExcludeDisabledTools = exclude
-		}
-	}
-	configCopy.Servers = latestServers
-
 	r.logger.Debug("Saving configuration to disk",
-		zap.Int("server_count", len(latestServers)),
+		zap.Int("server_count", len(configCopy.Servers)),
 		zap.String("config_path", snapshot.Path),
 		zap.Bool("using_config_service", r.configSvc != nil))
+
+	// Write all servers to storage (BBolt) to keep it in sync with config file
+	if r.storageManager != nil {
+		for _, serverCfg := range configCopy.Servers {
+			if err := r.storageManager.SaveUpstreamServer(serverCfg); err != nil {
+				r.logger.Error("Failed to save server to storage during config save",
+					zap.Error(err), zap.String("server", serverCfg.Name))
+				// Continue saving other servers; don't fail the entire save
+			}
+		}
+		r.logger.Debug("All servers saved to storage", zap.Int("count", len(configCopy.Servers)))
+	}
 
 	// Use ConfigService to save (doesn't hold locks, handles file I/O)
 	if r.configSvc != nil {
@@ -873,18 +857,15 @@ func (r *Runtime) SaveConfiguration() error {
 		r.logger.Debug("Config saved to disk via legacy path")
 	}
 
-	// Update in-memory config (applies to both configSvc and legacy paths)
-	r.logger.Debug("Updating in-memory config with latest servers",
-		zap.Int("server_count", len(latestServers)))
-
+	// Update in-memory config to match what was saved
 	r.mu.Lock()
 	oldServerCount := len(r.cfg.Servers)
-	r.cfg.Servers = latestServers
+	r.cfg.Servers = configCopy.Servers
 	r.mu.Unlock()
 
 	r.logger.Debug("Configuration saved and in-memory config updated",
 		zap.Int("old_server_count", oldServerCount),
-		zap.Int("new_server_count", len(latestServers)),
+		zap.Int("new_server_count", len(configCopy.Servers)),
 		zap.String("config_path", snapshot.Path))
 
 	// Emit config.saved event to notify subscribers (Web UI, tray, etc.)
@@ -969,17 +950,39 @@ func (r *Runtime) postConfigReload() {
 }
 
 // EnableServer enables or disables a server and persists the change.
+// Updates the config snapshot (source of truth), then writes to both storage and config file.
 func (r *Runtime) EnableServer(serverName string, enabled bool) error {
 	r.logger.Info("Request to change server enabled state",
 		zap.String("server", serverName),
 		zap.Bool("enabled", enabled))
 
-	if err := r.storageManager.EnableUpstreamServer(serverName, enabled); err != nil {
-		r.logger.Error("Failed to update server enabled state in storage", zap.Error(err))
-		return fmt.Errorf("failed to update server '%s' in storage: %w", serverName, err)
+	// Step 1: Update the config snapshot (source of truth)
+	snapshot := r.ConfigSnapshot()
+	if snapshot.Config == nil {
+		return fmt.Errorf("runtime configuration is not available")
 	}
 
-	// Save configuration synchronously to ensure changes are persisted before returning
+	found := false
+	for i, srv := range snapshot.Config.Servers {
+		if srv.Name == serverName {
+			snapshot.Config.Servers[i].Enabled = enabled
+			snapshot.Config.Servers[i].Updated = time.Now()
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("server not found in configuration: %s", serverName)
+	}
+
+	// Step 2: Update config service snapshot
+	if r.configSvc != nil {
+		if err := r.configSvc.Update(snapshot.Config, configsvc.UpdateTypeModify, "enable_server"); err != nil {
+			return fmt.Errorf("failed to update config service: %w", err)
+		}
+	}
+
+	// Step 3: Save to both storage and config file
 	if err := r.SaveConfiguration(); err != nil {
 		r.logger.Error("Failed to save configuration after state change", zap.Error(err))
 		return fmt.Errorf("failed to save configuration: %w", err)
@@ -1022,6 +1025,7 @@ func (r *Runtime) EnableServer(serverName string, enabled bool) error {
 }
 
 // QuarantineServer updates the quarantine state and persists the change.
+// Updates the config snapshot (source of truth), then writes to both storage and config file.
 // Security: When quarantining a server, all its tools are removed from the index
 // to prevent Tool Poisoning Attacks (TPA) from exposing potentially malicious tool descriptions.
 func (r *Runtime) QuarantineServer(serverName string, quarantined bool) error {
@@ -1029,9 +1033,30 @@ func (r *Runtime) QuarantineServer(serverName string, quarantined bool) error {
 		zap.String("server", serverName),
 		zap.Bool("quarantined", quarantined))
 
-	if err := r.storageManager.QuarantineUpstreamServer(serverName, quarantined); err != nil {
-		r.logger.Error("Failed to update server quarantine state in storage", zap.Error(err))
-		return fmt.Errorf("failed to update quarantine state for server '%s' in storage: %w", serverName, err)
+	// Step 1: Update the config snapshot (source of truth)
+	snapshot := r.ConfigSnapshot()
+	if snapshot.Config == nil {
+		return fmt.Errorf("runtime configuration is not available")
+	}
+
+	found := false
+	for i, srv := range snapshot.Config.Servers {
+		if srv.Name == serverName {
+			snapshot.Config.Servers[i].Quarantined = quarantined
+			snapshot.Config.Servers[i].Updated = time.Now()
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("server not found in configuration: %s", serverName)
+	}
+
+	// Step 2: Update config service snapshot
+	if r.configSvc != nil {
+		if err := r.configSvc.Update(snapshot.Config, configsvc.UpdateTypeModify, "quarantine_server"); err != nil {
+			return fmt.Errorf("failed to update config service: %w", err)
+		}
 	}
 
 	// Security: When quarantining a server, immediately remove its tools from the index
@@ -1048,7 +1073,7 @@ func (r *Runtime) QuarantineServer(serverName string, quarantined bool) error {
 		}
 	}
 
-	// Save configuration synchronously to ensure changes are persisted before returning
+	// Step 3: Save to both storage and config file
 	if err := r.SaveConfiguration(); err != nil {
 		r.logger.Error("Failed to save configuration after quarantine state change", zap.Error(err))
 		return fmt.Errorf("failed to save configuration: %w", err)

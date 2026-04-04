@@ -1,6 +1,41 @@
 # Lessons Learned - MCPProxy-Go
 
-**Last Updated:** March 15, 2026
+**Last Updated:** 2026-04-04
+
+---
+
+## Config File ↔ In-Memory State Divergence (2026-04-04)
+
+### Problem
+Config file and in-memory/BBolt state diverged on every server change. `SaveConfiguration()` used storage as source of truth, but `LoadConfiguredServers()` used config file. Fields like `SkipQuarantine` and `Shared` were silently dropped.
+
+### Root Cause
+Circular dependency: two stores (config file + BBolt) with different "source of truth" roles depending on operation. SaveConfiguration read from storage, merged 2 fields from in-memory, wrote back — losing any other field changes.
+
+### Fix
+- Config file snapshot is now the **single source of truth** for ALL server fields
+- `SaveConfiguration()`: reads snapshot → writes to storage + file → updates in-memory
+- `EnableServer`/`QuarantineServer`: update snapshot first, then save both stores
+- `GetConfig()`: reads from `ConfigSnapshot()` not stale `r.cfg`
+- `getDisabledToolsFromConfig()`: reads from config file directly
+
+### Lesson
+When you have multiple persistent stores, pick ONE authoritative source. Never do a "read from A, merge B, write back to A" pattern — it silently loses data.
+
+---
+
+## Tool Display: /tools vs /tools/all Must Be Consistent (2026-04-04)
+
+### Problem
+`/tools` endpoint returned disabled tools as "enabled" because it only filtered when `exclude_disabled_tools` flag was set. `/tools/all` was missing the `enabled` field entirely.
+
+### Fix
+- `/tools` always filters disabled tools (by definition: "enabled tools only")
+- `/tools/all` includes `enabled` field from config file's `DisabledTools` list
+- `Tool.Enabled` field added to contracts struct + converter
+
+### Lesson
+API endpoint semantics matter. `/tools` = enabled only, `/tools/all` = all with enabled flag. Don't make filtering conditional on a config flag.
 
 ---
 

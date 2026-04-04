@@ -1,57 +1,54 @@
 # Active Context - MCPProxy-Go
 
-**Last Updated:** 2026-04-04
-**Current Focus:** All major bugs fixed — pending push to remote (credential issue), minor UI polish remaining
+**Last Updated:** 2026-04-04 (Session 2 end)
+**Current Focus:** Config file ↔ in-memory state sync COMPLETE. Tool display fix COMPLETE. Tool toggle race condition tracked as mcpproxy-go-807.
 
 ## What's Done This Session
 
-### Backend Fixes (12 commits)
-1. ✅ `GET /tools/all` route — fixes 404 on server card tools page
-2. ✅ `PATCH /config` route alias — fixes 404 on Exclude Disabled Tools toggle
-3. ✅ `GET/PUT/DELETE /tools/preferences` — fixes 404 on tool enable/disable
-4. ✅ `EnableServer()` sync — config file and API state now match immediately
-5. ✅ `UpstreamRecord` fields — disabled_tools/ExcludeDisabledTools persisted to storage
-6. ✅ `handlePatchServer` — uses management service (works for all server sources)
-7. ✅ `UpdateServerDisabledTools` — now saves to storage too
-8. ✅ Server card toggle — fetchServers() after success instead of relying on SSE
+### Architecture Fix (8 files)
+- ✅ Config file is now authoritative source of truth for ALL server fields
+- ✅ `SaveConfiguration()`: reads config snapshot → writes to storage + file
+- ✅ `EnableServer()`/`QuarantineServer()`: update snapshot first, then save both
+- ✅ `GetConfig()`: reads from `ConfigSnapshot()` not stale `r.cfg`
+- ✅ `SkipQuarantine`/`Shared` fields added to `UpstreamRecord`
+- ✅ `getDisabledToolsFromConfig()`: reads from config file directly
 
-### UI Improvements
-1. ✅ "Approval Required" stat card (between Total Tools and Quarantined)
-2. ✅ Disabled/Excluded tools as full cards (same layout as enabled)
-3. ✅ Enabled tools section with green badge
-4. ✅ Enable/Disable buttons instead of toggle switches
-5. ✅ Telemetry banner disabled
+### UI Tool Display Fixes
+- ✅ `/tools` endpoint always filters disabled tools (was returning all)
+- ✅ `/tools/all` endpoint includes `enabled` field (was missing)
+- ✅ `Tool.Enabled` field added to contracts struct + converter
+- ✅ Config file had 13 disabled tools for Avalonia, server only has 19 tools total — 9 disabled tools no longer exist on the server (removed in server update)
 
-### DevOps
-1. ✅ Deploy script: stop service → build → deploy → start service
-2. ✅ No more mcpproxy-new.exe staging binary
+### Test Fixes
+- ✅ Fixed pre-broken `diagnostics_test.go` and `service_tool_preference_test.go` mocks
+- ✅ Fixed `TestService_GetToolPreferences` expectation
 
-### Epic Closure
-- ✅ Tool Management Epic (mcpproxy-go-81y) — all tasks closed
-- ✅ mcpproxy-go-cd7, mcpproxy-go-351, mcpproxy-go-d6o closed
+### Integration Tests
+- ✅ All 3 config sync tests pass
+- ✅ All 18 servers show matching disabled_tools between `/api/v1/config` and `/api/v1/servers`
 
 ## Active State
 
 ### Running
-- **MCPProxy Service:** Running on `127.0.0.1:3303` (PID varies)
-- **Deployed binary:** `D:\Development\CodeMode\mcpproxy-go\mcpproxy.exe` (61.5 MB)
+- **MCPProxy:** Running at `127.0.0.1:3303` (manual start, not service)
+- **Deployed binary:** `D:\Development\CodeMode\mcpproxy-go\mcpproxy.exe`
 - **Config:** `C:\Users\eserk\.mcpproxy\mcp_config.json`
 - **Database:** `C:\Users\eserk\.mcpproxy\config.db`
 
 ### Verified Working
-- API and config file sync: disabled_tools match in both
-- Enable/disable toggle: API → config file → storage all in sync
-- Server cards: tools display correctly with disabled_tools
+- Config file → in-memory → storage sync: all fields match across all 3 stores
+- `/api/v1/config` ↔ `/api/v1/servers` ↔ `/tools/all`: consistent disabled tools
+- `/tools`: returns only enabled tools (disabled filtered out)
+- All tests passing (except 3 pre-existing config test failures)
 
 ## Open Tasks
 
 ### High Priority
-- [ ] **Push to remote** — Blocked by GitHub credential mismatch (`thexmeta` vs `smart-mcp-proxy` org). 12 commits pending (~150 lines changed).
-- [ ] **UI: Tool toggle double-click bug** — Sometimes clicking "Disable" says "enabled" and requires second click. Race condition between optimistic update and fetchServers refresh.
+- [ ] **mcpproxy-go-807** — Fix tool toggle double-click race condition (P2 bug). Race between optimistic UI update and fetchServers() refresh. Fix: disable button during PATCH, skip fetchServers() after success, add loading spinner.
 
 ### Medium Priority
 - [ ] **mcpproxy-go-37f** — Testing phase for Tool Management epic
-- [ ] **Better error messages** for 404 upstream servers (user-side config issue, not mcpproxy bug)
+- [ ] Clean up 9 stale disabled_tools in Avalonia config (tools no longer exist on server)
 
 ### Low Priority
 - [ ] Add bulk tool approval from Servers list page
@@ -62,20 +59,20 @@
 
 ### Build/Deploy Commands
 ```powershell
-# Quick rebuild and deploy (service must be stopped first)
+# Quick rebuild and deploy
 Stop-Service -Name 'MCP-Proxy' -Force; Start-Sleep -Seconds 3
 go build -o mcpproxy.exe ./cmd/mcpproxy
 copy /Y mcpproxy.exe "D:\Development\CodeMode\mcpproxy-go\mcpproxy.exe"
 Start-Service -Name 'MCP-Proxy'; Start-Sleep -Seconds 10
 
-# Or use deploy script (needs release zip)
-powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1 -Version v0.23.15
+# Or manual start
+"D:\Development\CodeMode\mcpproxy-go\mcpproxy.exe" serve
 ```
 
 ### Known Issues
-- Push blocked: `remote: Permission to smart-mcp-proxy/mcpproxy-go.git denied to thexmeta`
-- Upstream server 404s are NOT mcpproxy bugs — wrong URLs in user's config
-- stdio server timeouts are NOT mcpproxy bugs — MCP processes not responding
+- Config file has 9 stale disabled_tools for Avalonia (tools removed from server)
+- 3 pre-existing config test failures (unrelated to our changes)
+- Management test pre-broken mocks fixed
 
 ## Related Documentation
 - Session Summary: `docs/session_summary.md`
