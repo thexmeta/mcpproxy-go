@@ -1450,97 +1450,71 @@ func (s *Server) handlePatchServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pre-fetch existing server so we can preserve bool fields the request
-	// did not explicitly set. `config.ServerConfig` uses non-pointer bools
-	// whose zero value cannot be distinguished from "not set" by the time
-	// the update reaches the controller — without this, a PATCH body like
-	// `{"args": [...]}` silently disables a previously-enabled server.
-	var existingSrv *config.ServerConfig
-	if cfg, err := s.controller.GetConfig(); err == nil && cfg != nil {
-		for _, sc := range cfg.Servers {
-			if sc != nil && sc.Name == serverName {
-				existingSrv = sc
-				break
-			}
-		}
-	}
-
-	// Build partial update config - only set fields that were provided
-	updates := &config.ServerConfig{Name: serverName}
-	hasUpdates := false
-
+	// Build patch map from request
+	patch := make(map[string]interface{})
 	if req.URL != "" {
-		updates.URL = req.URL
-		hasUpdates = true
+		patch["url"] = req.URL
 	}
 	if req.Command != "" {
-		updates.Command = req.Command
-		hasUpdates = true
+		patch["command"] = req.Command
 	}
 	if req.Args != nil {
-		updates.Args = req.Args
-		hasUpdates = true
+		patch["args"] = req.Args
 	}
 	if req.Env != nil {
-		updates.Env = req.Env
-		hasUpdates = true
+		patch["env"] = req.Env
 	}
 	if req.Headers != nil {
-		updates.Headers = req.Headers
-		hasUpdates = true
+		patch["headers"] = req.Headers
 	}
 	if req.WorkingDir != "" {
-		updates.WorkingDir = req.WorkingDir
-		hasUpdates = true
+		patch["working_dir"] = req.WorkingDir
 	}
 	if req.Protocol != "" {
-		updates.Protocol = req.Protocol
-		hasUpdates = true
+		patch["protocol"] = req.Protocol
 	}
 	if req.Enabled != nil {
-		updates.Enabled = *req.Enabled
-		hasUpdates = true
-	} else if existingSrv != nil {
-		updates.Enabled = existingSrv.Enabled
+		patch["enabled"] = *req.Enabled
 	}
 	if req.Quarantined != nil {
-		updates.Quarantined = *req.Quarantined
-		hasUpdates = true
-	} else if existingSrv != nil {
-		updates.Quarantined = existingSrv.Quarantined
+		patch["quarantined"] = *req.Quarantined
 	}
 	if req.ReconnectOnUse != nil {
-		updates.ReconnectOnUse = *req.ReconnectOnUse
-		hasUpdates = true
-	} else if existingSrv != nil {
-		updates.ReconnectOnUse = existingSrv.ReconnectOnUse
+		patch["reconnect_on_use"] = *req.ReconnectOnUse
 	}
 	if req.Isolation != nil {
-		updates.Isolation = req.Isolation.toConfig()
-		hasUpdates = true
+		patch["isolation"] = req.Isolation.toConfig()
 	}
 	if req.ExcludeDisabledTools != nil {
-		updates.ExcludeDisabledTools = *req.ExcludeDisabledTools
-		hasUpdates = true
+		patch["exclude_disabled_tools"] = *req.ExcludeDisabledTools
 	}
 	if req.DisabledTools != nil {
-		updates.DisabledTools = req.DisabledTools
-		hasUpdates = true
+		patch["disabled_tools"] = req.DisabledTools
 	}
 
-	if !hasUpdates {
+	if len(patch) == 0 {
 		s.writeError(w, r, http.StatusBadRequest, "No fields to update")
 		return
 	}
 
 	logger := s.getRequestLogger(r)
 
-	if err := s.controller.UpdateServer(r.Context(), serverName, updates); err != nil {
+	// Use management service which handles both config-file and storage-based servers
+	mgmtSvc, ok := s.controller.GetManagementService().(interface {
+		PatchServerConfig(ctx context.Context, name string, patch map[string]interface{}) error
+	})
+	if !ok {
+		logger.Error("Management service not available or missing PatchServerConfig method")
+		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		return
+	}
+
+	if err := mgmtSvc.PatchServerConfig(r.Context(), serverName, patch); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.writeError(w, r, http.StatusNotFound, err.Error())
 			return
 		}
-		logger.Error("Failed to update server", "server", serverName, "error", err)
+		logger.Error("Failed to update server config", "server", serverName, "error", err)
 		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update server: %v", err))
 		return
 	}

@@ -968,6 +968,39 @@ func (s *ServiceImpl) PatchServerConfig(ctx context.Context, name string, patch 
 			found = true
 
 			// Apply patch fields
+			if val, ok := patch["url"].(string); ok {
+				cfg.Servers[i].URL = val
+			}
+			if val, ok := patch["command"].(string); ok {
+				cfg.Servers[i].Command = val
+			}
+			if val, ok := patch["args"].([]string); ok {
+				cfg.Servers[i].Args = val
+			}
+			if val, ok := patch["env"].(map[string]string); ok {
+				cfg.Servers[i].Env = val
+			}
+			if val, ok := patch["headers"].(map[string]string); ok {
+				cfg.Servers[i].Headers = val
+			}
+			if val, ok := patch["working_dir"].(string); ok {
+				cfg.Servers[i].WorkingDir = val
+			}
+			if val, ok := patch["protocol"].(string); ok {
+				cfg.Servers[i].Protocol = val
+			}
+			if val, ok := patch["enabled"].(bool); ok {
+				cfg.Servers[i].Enabled = val
+			}
+			if val, ok := patch["quarantined"].(bool); ok {
+				cfg.Servers[i].Quarantined = val
+			}
+			if val, ok := patch["reconnect_on_use"].(bool); ok {
+				cfg.Servers[i].ReconnectOnUse = val
+			}
+			if val, ok := patch["isolation"].(*config.IsolationConfig); ok {
+				cfg.Servers[i].Isolation = val
+			}
 			if excludeDisabledTools, ok := patch["exclude_disabled_tools"].(bool); ok {
 				cfg.Servers[i].ExcludeDisabledTools = excludeDisabledTools
 			}
