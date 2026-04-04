@@ -673,68 +673,110 @@
             </div>
 
             <!-- Disabled Tools Section -->
-            <div v-if="disabledTools.length > 0" class="mt-6">
+            <div v-if="filteredDisabledTools.length > 0" class="mt-6">
               <div class="flex items-center justify-between mb-3">
                 <div>
                   <h3 class="text-lg font-semibold text-warning">
-                    Disabled Tools ({{ disabledTools.length }})
+                    Disabled Tools ({{ filteredDisabledTools.length }})
                   </h3>
                   <p class="text-base-content/70 text-sm">Tools explicitly disabled in config</p>
                 </div>
               </div>
-              <div class="space-y-2">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div
-                  v-for="toolName in disabledTools"
-                  :key="'disabled-' + toolName"
-                  class="flex items-center justify-between bg-base-200 rounded-lg px-4 py-3"
+                  v-for="tool in filteredDisabledTools"
+                  :key="'disabled-' + tool.name"
+                  class="card bg-base-100 shadow-md border border-warning/30"
                 >
-                  <div class="flex items-center gap-2">
-                    <span class="badge badge-neutral badge-sm">disabled</span>
-                    <span class="font-mono text-sm">{{ toolName }}</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <span v-if="toolPreferenceLoading === toolName" class="loading loading-spinner loading-xs"></span>
-                    <button
-                      @click="toggleDisabledTool(toolName)"
-                      class="btn btn-sm btn-outline btn-success"
-                      :disabled="toolPreferenceLoading === toolName"
-                    >
-                      Enable
-                    </button>
+                  <div class="card-body">
+                    <div class="flex items-start justify-between">
+                      <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                          <h4 class="card-title text-lg">{{ tool.name }}</h4>
+                          <span class="badge badge-warning badge-sm">disabled</span>
+                        </div>
+                        <p class="text-sm text-base-content/70 mt-1">
+                          {{ tool.description || 'No description available' }}
+                        </p>
+                        <AnnotationBadges
+                          v-if="tool.annotations"
+                          :annotations="tool.annotations"
+                          class="mt-2"
+                        />
+                      </div>
+                      <div class="flex flex-col items-end gap-2 ml-4">
+                        <div class="flex items-center gap-2">
+                          <button
+                            class="btn btn-ghost btn-xs"
+                            @click="openEditTool(tool)"
+                            title="Edit tool name and description"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            @click="toggleDisabledTool(tool.name)"
+                            class="btn btn-sm btn-outline btn-success"
+                            :disabled="toolPreferenceLoading === tool.name"
+                          >
+                            Enable
+                          </button>
+                        </div>
+                        <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
+                      </div>
+                    </div>
+                    <div v-if="tool.input_schema" class="card-actions justify-end mt-4">
+                      <button
+                        class="btn btn-sm btn-outline"
+                        @click="viewToolSchema(tool)"
+                      >
+                        View Schema
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Excluded Tools (via exclude_disabled_tools) -->
-            <div v-if="excludedTools.length > 0" class="mt-6">
+            <div v-if="excludedToolsList.length > 0" class="mt-6">
               <div class="flex items-center justify-between mb-3">
                 <div>
                   <h3 class="text-lg font-semibold text-base-content/60">
-                    Excluded Tools ({{ excludedTools.length }})
+                    Excluded Tools ({{ excludedToolsList.length }})
                   </h3>
                   <p class="text-base-content/70 text-sm">Tools hidden by "Exclude Disabled Tools" setting</p>
                 </div>
               </div>
-              <div class="space-y-2">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div
-                  v-for="toolName in excludedTools"
-                  :key="'excluded-' + toolName"
-                  class="flex items-center justify-between bg-base-200 rounded-lg px-4 py-3 opacity-75"
+                  v-for="tool in excludedToolsList"
+                  :key="'excluded-' + tool.name"
+                  class="card bg-base-100 shadow-md opacity-50"
                 >
-                  <div class="flex items-center gap-2">
-                    <span class="badge badge-ghost badge-sm">excluded</span>
-                    <span class="font-mono text-sm">{{ toolName }}</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <span v-if="toolPreferenceLoading === toolName" class="loading loading-spinner loading-xs"></span>
-                    <button
-                      @click="toggleDisabledTool(toolName)"
-                      class="btn btn-sm btn-outline"
-                      :disabled="toolPreferenceLoading === toolName"
-                    >
-                      Include
-                    </button>
+                  <div class="card-body">
+                    <div class="flex items-start justify-between">
+                      <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                          <h4 class="card-title text-lg">{{ tool.name }}</h4>
+                          <span class="badge badge-ghost badge-sm">excluded</span>
+                        </div>
+                        <p class="text-sm text-base-content/70 mt-1">
+                          {{ tool.description || 'No description available' }}
+                        </p>
+                      </div>
+                      <div class="flex flex-col items-end gap-2 ml-4">
+                        <button
+                          @click="toggleDisabledTool(tool.name)"
+                          class="btn btn-sm btn-outline"
+                          :disabled="toolPreferenceLoading === tool.name"
+                        >
+                          Include
+                        </button>
+                        <span v-if="toolPreferenceLoading === tool.name" class="loading loading-spinner loading-xs"></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1857,16 +1899,23 @@ const quarantinedTools = computed(() => {
   return toolApprovals.value.filter(t => t.status === 'pending' || t.status === 'changed')
 })
 
-// Disabled tools
-const disabledTools = computed(() => {
-  return server.value?.disabled_tools || []
+// Disabled tools - full Tool objects from serverTools that are disabled
+const disabledToolsList = computed<Tool[]>(() => {
+  const disabledNames = new Set(server.value?.disabled_tools || [])
+  return serverTools.value.filter(t => disabledNames.has(t.name) || t.enabled === false)
 })
 
-const excludedTools = computed(() => {
-  // Tools excluded via exclude_disabled_tools (all tools not in enabled list)
+// Enabled tools - tools that are not disabled
+const enabledToolsList = computed<Tool[]>(() => {
+  const disabledNames = new Set(server.value?.disabled_tools || [])
+  return serverTools.value.filter(t => !disabledNames.has(t.name) && t.enabled !== false)
+})
+
+// Excluded tools - tools hidden by exclude_disabled_tools toggle
+const excludedToolsList = computed<Tool[]>(() => {
   if (!server.value?.exclude_disabled_tools) return []
-  const allToolNames = serverTools.value.map(t => t.name)
-  return allToolNames.filter(name => !isToolEnabled(name))
+  const disabledNames = new Set(server.value?.disabled_tools || [])
+  return serverTools.value.filter(t => !disabledNames.has(t.name) && t.enabled === false)
 })
 
 // Security scan (Spec 039)
@@ -1984,10 +2033,20 @@ const riskScoreClass = computed(() => {
 })
 
 const filteredTools = computed(() => {
-  if (!toolSearch.value) return serverTools.value
+  if (!toolSearch.value) return enabledToolsList.value
 
   const query = toolSearch.value.toLowerCase()
-  return serverTools.value.filter(tool =>
+  return enabledToolsList.value.filter(tool =>
+    tool.name.toLowerCase().includes(query) ||
+    tool.description?.toLowerCase().includes(query)
+  )
+})
+
+const filteredDisabledTools = computed(() => {
+  if (!toolSearch.value) return disabledToolsList.value
+
+  const query = toolSearch.value.toLowerCase()
+  return disabledToolsList.value.filter(tool =>
     tool.name.toLowerCase().includes(query) ||
     tool.description?.toLowerCase().includes(query)
   )
