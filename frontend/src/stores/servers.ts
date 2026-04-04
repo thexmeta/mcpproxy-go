@@ -129,7 +129,8 @@ export const useServersStore = defineStore('servers', () => {
 
       const response = await api.enableServer(serverName)
       if (response.success) {
-        // The SSE event will trigger a full refresh with actual state
+        // Refresh to get actual state from backend
+        await fetchServers(true)
         return true
       } else {
         // Revert optimistic update on error
@@ -164,7 +165,8 @@ export const useServersStore = defineStore('servers', () => {
 
       const response = await api.disableServer(serverName)
       if (response.success) {
-        // The SSE event will trigger a full refresh with actual state
+        // Refresh to get actual state from backend
+        await fetchServers(true)
         return true
       } else {
         // Revert optimistic update on error
