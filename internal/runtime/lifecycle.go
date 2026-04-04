@@ -992,34 +992,31 @@ func (r *Runtime) EnableServer(serverName string, enabled bool) error {
 	}
 	r.EmitActivityConfigChange(action, serverName, "api", []string{"enabled"}, map[string]interface{}{"enabled": !enabled}, map[string]interface{}{"enabled": enabled})
 
-	// Perform heavy operations (server reload, reconnection, reindexing) asynchronously
-	// so the HTTP handler returns immediately after the storage write.
-	// The SSE event is emitted after completion so the UI updates.
-	go func() {
-		if err := r.LoadConfiguredServers(nil); err != nil {
-			r.logger.Error("Failed to synchronize runtime after enable toggle", zap.Error(err))
+	// Reload configuration synchronously to ensure supervisor state is updated before returning
+	if err := r.LoadConfiguredServers(nil); err != nil {
+		r.logger.Error("Failed to synchronize runtime after enable toggle", zap.Error(err))
+		return fmt.Errorf("failed to reload configuration: %w", err)
+	}
+
+	// When disabling a server, remove its tools from the search index
+	// This ensures disabled server tools don't appear in search results
+	if !enabled && r.indexManager != nil {
+		if err := r.indexManager.DeleteServerTools(serverName); err != nil {
+			r.logger.Warn("Failed to remove disabled server tools from index",
+				zap.String("server", serverName),
+				zap.Error(err))
+		} else {
+			r.logger.Info("Removed disabled server tools from search index",
+				zap.String("server", serverName))
 		}
+	}
 
-		// When disabling a server, remove its tools from the search index
-		// This ensures disabled server tools don't appear in search results
-		if !enabled && r.indexManager != nil {
-			if err := r.indexManager.DeleteServerTools(serverName); err != nil {
-				r.logger.Warn("Failed to remove disabled server tools from index",
-					zap.String("server", serverName),
-					zap.Error(err))
-			} else {
-				r.logger.Info("Removed disabled server tools from search index",
-					zap.String("server", serverName))
-			}
-		}
+	r.HandleUpstreamServerChange(r.AppContext())
 
-		r.HandleUpstreamServerChange(r.AppContext())
-
-		r.emitServersChanged("enable_toggle", map[string]any{
-			"server":  serverName,
-			"enabled": enabled,
-		})
-	}()
+	r.emitServersChanged("enable_toggle", map[string]any{
+		"server":  serverName,
+		"enabled": enabled,
+	})
 
 	return nil
 }
