@@ -32,6 +32,10 @@ func (m *annotationCoverageController) GetServerTools(serverName string) ([]map[
 	return tools, nil
 }
 
+func (m *annotationCoverageController) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
+	return m.GetServerTools(serverName)
+}
+
 func TestHandleAnnotationCoverage(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 

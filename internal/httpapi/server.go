@@ -74,6 +74,7 @@ type ServerController interface {
 
 	// Tools and search
 	GetServerTools(serverName string) ([]map[string]interface{}, error)
+	GetAllServerTools(serverName string) ([]map[string]interface{}, error)
 	SearchTools(query string, limit int) ([]map[string]interface{}, error)
 
 	// Logs
@@ -2353,23 +2354,22 @@ func (s *Server) handleGetServerTools(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetAllServerTools godoc
-// @Summary Get all server tools including disabled
-// @Description Retrieve all available tools for a specific server, including disabled ones.
-// Disabled tools are returned with enabled=false so clients can see and re-enable them.
+// @Summary Get all tools for a server including disabled ones
+// @Description Retrieve all tools (including disabled) for a specific upstream MCP server
 // @Tags servers
 // @Produce json
 // @Security ApiKeyAuth
 // @Security ApiKeyQuery
-// @Param id path string true "Server ID or name"
-// @Success 200 {object} contracts.GetServerToolsResponse "All server tools retrieved successfully"
-// @Failure 400 {object} contracts.ErrorResponse "Bad request (missing server ID)"
-// @Failure 404 {object} contracts.ErrorResponse "Server not found"
-// @Failure 500 {object} contracts.ErrorResponse "Internal server error"
-// @Router /api/v1/servers/{id}/tools/all [get]
+// @Param name path string true "Server name"
+// @Success 200 {object} contracts.GetServerToolsResponse
+// @Failure 401 {object} contracts.APIResponse
+// @Failure 404 {object} contracts.APIResponse
+// @Failure 500 {object} contracts.APIResponse
+// @Router /servers/{name}/tools/all [get]
 func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request) {
-	serverID := chi.URLParam(r, "id")
+	serverID := chi.URLParam(r, "name")
 	if serverID == "" {
-		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
+		s.errorResponse(w, r, http.StatusBadRequest, "Server name is required", nil)
 		return
 	}
 
@@ -2378,25 +2378,44 @@ func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request)
 		GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
 	})
 	if !ok {
-		s.logger.Error("Management service not available or missing GetAllServerTools method")
-		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
+		s.errorResponse(w, r, http.StatusNotImplemented, "Management service does not support GetAllServerTools", nil)
 		return
 	}
 
 	tools, err := mgmtSvc.GetAllServerTools(r.Context(), serverID)
 	if err != nil {
-		s.logger.Error("Failed to get all server tools", "server", serverID, "error", err)
-
-		if strings.Contains(err.Error(), "not found") {
-			s.writeError(w, r, http.StatusNotFound, fmt.Sprintf("Server not found: %s", serverID))
-			return
+		if err.Error() == "server not found" {
+			s.errorResponse(w, r, http.StatusNotFound, "Server not found", nil)
+		} else {
+			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to get server tools", err)
 		}
-		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to get tools: %v", err))
 		return
 	}
 
 	// Convert to typed tools
 	typedTools := contracts.ConvertGenericToolsToTyped(tools)
+
+	// Enrich with approval status (Spec 032)
+	enrichedCount := 0
+	var firstErr error
+	for i := range typedTools {
+		status, err := s.controller.GetToolApprovalStatus(serverID, typedTools[i].Name)
+		if err == nil && status != "" {
+			typedTools[i].ApprovalStatus = status
+			enrichedCount++
+		} else if i == 0 {
+			firstErr = err
+		}
+	}
+	if firstErr != nil {
+		fmt.Printf("[DEBUG] Tool approval enrichment (all): server=%s enriched=%d/%d first_error=%v\n", serverID, enrichedCount, len(typedTools), firstErr)
+	} else {
+		fmt.Printf("[DEBUG] Tool approval enrichment (all): server=%s enriched=%d/%d\n", serverID, enrichedCount, len(typedTools))
+	}
+
+	sort.SliceStable(typedTools, func(i, j int) bool {
+		return toolApprovalPriority(typedTools[i].ApprovalStatus) < toolApprovalPriority(typedTools[j].ApprovalStatus)
+	})
 
 	response := contracts.GetServerToolsResponse{
 		ServerName: serverID,
@@ -2404,7 +2423,7 @@ func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request)
 		Count:      len(typedTools),
 	}
 
-	s.writeSuccess(w, response)
+	s.jsonResponse(w, r, http.StatusOK, response)
 }
 
 // handleGetServerLogs godoc

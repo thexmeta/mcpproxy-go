@@ -189,6 +189,10 @@ func (m *MockServerController) GetServerTools(serverName string) ([]map[string]i
 	}, nil
 }
 
+func (m *MockServerController) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
+	return m.GetServerTools(serverName)
+}
+
 func (m *MockServerController) SearchTools(_ string, _ int) ([]map[string]interface{}, error) {
 	return []map[string]interface{}{
 		{

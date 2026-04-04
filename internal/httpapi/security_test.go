@@ -254,6 +254,9 @@ func (m *baseController) GetManagementService() interface{}          { return ni
 func (m *baseController) GetServerTools(serverName string) ([]map[string]interface{}, error) {
 	return nil, nil
 }
+func (m *baseController) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
+	return nil, nil
+}
 func (m *baseController) SearchTools(query string, limit int) ([]map[string]interface{}, error) {
 	return nil, nil
 }

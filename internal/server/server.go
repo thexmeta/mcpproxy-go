@@ -2293,6 +2293,13 @@ func (s *Server) GetServerTools(serverName string) ([]map[string]interface{}, er
 	return result, nil
 }
 
+// GetAllServerTools retrieves all tools including disabled ones.
+// Unlike GetServerTools, this includes disabled tools with enabled=false flag.
+func (s *Server) GetAllServerTools(serverName string) ([]map[string]interface{}, error) {
+	// Delegate to runtime's GetAllServerTools which includes disabled tools
+	return s.runtime.GetAllServerTools(serverName)
+}
+
 // SearchTools searches for tools using the index
 func (s *Server) SearchTools(query string, limit int) ([]map[string]interface{}, error) {
 	s.logger.Debug("SearchTools called", zap.String("query", query), zap.Int("limit", limit))
