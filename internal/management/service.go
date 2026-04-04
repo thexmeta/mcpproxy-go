@@ -947,11 +947,12 @@ func (s *ServiceImpl) GetAllServerTools(ctx context.Context, name string) ([]map
 // syncServerToStorage updates storage (database) to match the config file changes.
 // This keeps the database in sync with the config file during live updates.
 func (s *ServiceImpl) syncServerToStorage(name string, patch map[string]interface{}) error {
-	if s.runtime.StorageManager == nil {
+	sm := s.runtime.StorageManager()
+	if sm == nil {
 		return fmt.Errorf("storage manager not available")
 	}
 
-	storageCfg, err := s.runtime.StorageManager().GetUpstreamServer(name)
+	storageCfg, err := sm.GetUpstreamServer(name)
 	if err != nil || storageCfg == nil {
 		return fmt.Errorf("server not found in storage: %s", name)
 	}
@@ -972,7 +973,7 @@ func (s *ServiceImpl) syncServerToStorage(name string, patch map[string]interfac
 		storageCfg.DisabledTools = disabledTools
 	}
 
-	if err := s.runtime.StorageManager().SaveUpstreamServer(storageCfg); err != nil {
+	if err := sm.SaveUpstreamServer(storageCfg); err != nil {
 		return fmt.Errorf("failed to save server to storage: %w", err)
 	}
 
