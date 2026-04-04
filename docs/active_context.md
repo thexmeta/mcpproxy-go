@@ -1,7 +1,29 @@
 # Active Context - MCPProxy-Go
 
 **Last Updated:** 2026-04-04
-**Current Focus:** Tool Management Epic Complete — Testing Phase (mcpproxy-go-37f) Next
+**Current Focus:** Server Detail 404 Tools Fix Committed — Push Pending Credential Fix
+
+## Fix Applied: Server Card Detail 404 for Tools
+
+**Root Cause:** Frontend `ServerDetail.vue` calls `GET /api/v1/servers/{name}/tools/all` but this route was never registered in the HTTP API router. The `GetAllServerTools` method existed in `management/service.go` and `runtime/runtime.go` but was never wired to an HTTP endpoint.
+
+**Changes Made (commit dd7ff9c):**
+1. Added `GetAllServerTools` to `ServerController` interface (`internal/httpapi/server.go`)
+2. Registered `GET /tools/all` route
+3. Added `handleGetAllServerTools` handler (mirrors `handleGetServerTools`)
+4. Added `GetAllServerTools` delegation method in `internal/server/server.go`
+5. Updated 4 test mock structs to satisfy interface
+
+**Files Changed:**
+- `internal/httpapi/server.go` — interface + route + handler
+- `internal/server/server.go` — delegation method
+- `internal/httpapi/*_test.go` — mock updates (security, contracts, code_exec, annotation_coverage)
+
+**Build Status:** ✅ Both `mcpproxy` and `mcpproxy-tray` compile successfully
+
+**Push Status:** ⚠️ Blocked — GitHub 403 (`thexmeta` lacks write access to `smart-mcp-proxy/mcpproxy-go`). Commit is ready locally.
+
+---
 
 ## Current State
 

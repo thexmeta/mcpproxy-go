@@ -50,7 +50,9 @@
       <div class="stat">
         <div class="stat-title">Quarantined</div>
         <div class="stat-value text-warning">{{ serversStore.serverCount.quarantined }}</div>
-        <div class="stat-desc">Need security review</div>
+        <div class="stat-desc">
+          {{ serversStore.totalQuarantinedTools > 0 ? serversStore.totalQuarantinedTools + ' tools need approval' : 'Need security review' }}
+        </div>
       </div>
 
       <div class="stat">
@@ -86,6 +88,9 @@
           :class="['btn btn-sm', filter === 'quarantined' ? 'btn-primary' : 'btn-outline']"
         >
           Quarantined ({{ serversStore.quarantinedServers.length }})
+          <span v-if="serversStore.totalQuarantinedTools > 0" class="badge badge-sm badge-warning ml-1">
+            {{ serversStore.totalQuarantinedTools }} tools
+          </span>
         </button>
       </div>
 

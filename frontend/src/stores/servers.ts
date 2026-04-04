@@ -36,6 +36,15 @@ export const useServersStore = defineStore('servers', () => {
       .reduce((sum, server) => sum + server.tool_count, 0)
   )
 
+  // Total unapproved tools across all servers (pending + changed)
+  const totalQuarantinedTools = computed(() =>
+    servers.value.reduce((sum, server) => {
+      const q = server.quarantine
+      if (!q) return sum
+      return sum + (q.pending_count ?? 0) + (q.changed_count ?? 0)
+    }, 0)
+  )
+
   // Helper: Smart merge servers to preserve object references and avoid full re-renders
   function mergeServers(existing: Server[], incoming: Server[]): Server[] {
     const existingMap = new Map(existing.map(s => [s.name, s]))
@@ -386,6 +395,7 @@ export const useServersStore = defineStore('servers', () => {
     enabledServers,
     quarantinedServers,
     totalTools,
+    totalQuarantinedTools,
 
     // Actions
     fetchServers,
