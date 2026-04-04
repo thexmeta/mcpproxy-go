@@ -49,13 +49,35 @@ $FilesToCopy = @(
 foreach ($File in $FilesToCopy) {
     $Source = "$ExtractPath\$File"
     $Dest = "$TargetPath\$File"
-    
+
     if (Test-Path $Source) {
         Copy-Item -Path $Source -Destination $Dest -Force
         Write-Host "  Copied: $File" -ForegroundColor Green
     } else {
         Write-Host "  Warning: $File not found in release" -ForegroundColor Orange
     }
+}
+
+# Restart MCP-Proxy service
+Write-Host ""
+Write-Host "Restarting MCP-Proxy service..." -ForegroundColor Yellow
+try {
+    $Service = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
+    if ($Service) {
+        Write-Host "  Stopping MCP-Proxy service..." -ForegroundColor Yellow
+        Stop-Service -Name "MCP-Proxy" -Force -WarningAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        Write-Host "  Starting MCP-Proxy service..." -ForegroundColor Yellow
+        Start-Service -Name "MCP-Proxy"
+        Start-Sleep -Seconds 2
+        $ServiceStatus = Get-Service -Name "MCP-Proxy"
+        Write-Host "  Service status: $($ServiceStatus.Status)" -ForegroundColor Green
+    } else {
+        Write-Host "  MCP-Proxy service not found, skipping restart" -ForegroundColor Orange
+    }
+}
+catch {
+    Write-Host "  Warning: Failed to restart service: $_" -ForegroundColor Orange
 }
 
 # Cleanup
