@@ -512,6 +512,17 @@ func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contra
 			srv.ExcludeDisabledTools = excludeDisabledTools
 		}
 
+		// Extract disabled_tools config
+		if disabledTools, ok := srvRaw["disabled_tools"].([]interface{}); ok {
+			for _, t := range disabledTools {
+				if name, ok := t.(string); ok {
+					srv.DisabledTools = append(srv.DisabledTools, name)
+				}
+			}
+		} else if disabledTools, ok := srvRaw["disabled_tools"].([]string); ok {
+			srv.DisabledTools = disabledTools
+		}
+
 		servers = append(servers, srv)
 
 		// Update stats
@@ -959,6 +970,17 @@ func (s *ServiceImpl) PatchServerConfig(ctx context.Context, name string, patch 
 			// Apply patch fields
 			if excludeDisabledTools, ok := patch["exclude_disabled_tools"].(bool); ok {
 				cfg.Servers[i].ExcludeDisabledTools = excludeDisabledTools
+			}
+			if disabledTools, ok := patch["disabled_tools"].([]interface{}); ok {
+				var tools []string
+				for _, t := range disabledTools {
+					if name, ok := t.(string); ok {
+						tools = append(tools, name)
+					}
+				}
+				cfg.Servers[i].DisabledTools = tools
+			} else if disabledTools, ok := patch["disabled_tools"].([]string); ok {
+				cfg.Servers[i].DisabledTools = disabledTools
 			}
 
 			// Add more fields here as needed in the future

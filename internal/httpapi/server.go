@@ -526,8 +526,9 @@ func (s *Server) setupRoutes() {
 		r.Post("/servers/enable_all", s.handleEnableAll)
 		r.Post("/servers/disable_all", s.handleDisableAll)
 		r.Route("/servers/{id}", func(r chi.Router) {
-			r.Patch("/", s.handlePatchServer)   // Partial update server config
-			r.Delete("/", s.handleRemoveServer) // T002: Remove server
+			r.Patch("/", s.handlePatchServer)      // Partial update server config
+			r.Patch("/config", s.handlePatchServer) // Alias for frontend compatibility
+			r.Delete("/", s.handleRemoveServer)    // T002: Remove server
 			r.Post("/enable", s.handleEnableServer)
 			r.Post("/disable", s.handleDisableServer)
 			r.Post("/restart", s.handleRestartServer)
@@ -1222,17 +1223,19 @@ func (s *Server) enrichServersWithQuarantineStats(servers []contracts.Server) {
 
 // AddServerRequest represents a request to add a new server
 type AddServerRequest struct {
-	Name           string            `json:"name"`
-	URL            string            `json:"url,omitempty"`
-	Command        string            `json:"command,omitempty"`
-	Args           []string          `json:"args,omitempty"`
-	Env            map[string]string `json:"env,omitempty"`
-	Headers        map[string]string `json:"headers,omitempty"`
-	WorkingDir     string            `json:"working_dir,omitempty"`
-	Protocol       string            `json:"protocol,omitempty"`
-	Enabled        *bool             `json:"enabled,omitempty"`
-	Quarantined    *bool             `json:"quarantined,omitempty"`
-	ReconnectOnUse *bool             `json:"reconnect_on_use,omitempty"`
+	Name                 string            `json:"name"`
+	URL                  string            `json:"url,omitempty"`
+	Command              string            `json:"command,omitempty"`
+	Args                 []string          `json:"args,omitempty"`
+	Env                  map[string]string `json:"env,omitempty"`
+	Headers              map[string]string `json:"headers,omitempty"`
+	WorkingDir           string            `json:"working_dir,omitempty"`
+	Protocol             string            `json:"protocol,omitempty"`
+	Enabled              *bool             `json:"enabled,omitempty"`
+	Quarantined          *bool             `json:"quarantined,omitempty"`
+	ReconnectOnUse       *bool             `json:"reconnect_on_use,omitempty"`
+	ExcludeDisabledTools *bool             `json:"exclude_disabled_tools,omitempty"`
+	DisabledTools        []string          `json:"disabled_tools,omitempty"`
 	// Isolation carries per-server Docker isolation overrides (image,
 	// network_mode, extra_args, working_dir, enabled). A nil pointer
 	// means "do not touch isolation config"; an empty-but-present
@@ -1514,6 +1517,14 @@ func (s *Server) handlePatchServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Isolation != nil {
 		updates.Isolation = req.Isolation.toConfig()
+		hasUpdates = true
+	}
+	if req.ExcludeDisabledTools != nil {
+		updates.ExcludeDisabledTools = *req.ExcludeDisabledTools
+		hasUpdates = true
+	}
+	if req.DisabledTools != nil {
+		updates.DisabledTools = req.DisabledTools
 		hasUpdates = true
 	}
 

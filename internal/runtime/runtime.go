@@ -1850,9 +1850,10 @@ func (r *Runtime) GetAllServers() ([]map[string]interface{}, error) {
 		healthStatus := health.CalculateHealth(healthInput, healthConfig)
 		serverMap["health"] = healthStatus
 
-		// Add exclude_disabled_tools config from server config
+		// Add exclude_disabled_tools and disabled_tools config from server config
 		if serverStatus.Config != nil {
 			serverMap["exclude_disabled_tools"] = serverStatus.Config.ExcludeDisabledTools
+			serverMap["disabled_tools"] = serverStatus.Config.DisabledTools
 		}
 
 		result = append(result, serverMap)

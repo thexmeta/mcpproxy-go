@@ -1154,6 +1154,14 @@ func (s *Server) UpdateServer(ctx context.Context, serverName string, updates *c
 	existing.Enabled = updates.Enabled
 	existing.Quarantined = updates.Quarantined
 	existing.ReconnectOnUse = updates.ReconnectOnUse
+	// ExcludeDisabledTools is applied if explicitly set
+	if updates.ExcludeDisabledTools {
+		existing.ExcludeDisabledTools = true
+	}
+	// DisabledTools is always applied (nil check is for intentional empty list)
+	if updates.DisabledTools != nil {
+		existing.DisabledTools = updates.DisabledTools
+	}
 
 	// Isolation is PATCH-semantic: nil means "leave unchanged"; a
 	// present struct means "replace". Within the struct, the caller

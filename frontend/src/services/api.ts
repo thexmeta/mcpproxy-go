@@ -286,6 +286,13 @@ class APIService {
     })
   }
 
+  async setDisabledTools(serverName: string, disabledTools: string[]): Promise<APIResponse> {
+    return this.request(`/api/v1/servers/${encodeURIComponent(serverName)}/config`, {
+      method: 'PATCH',
+      body: JSON.stringify({ disabled_tools: disabledTools }),
+    })
+  }
+
   async discoverServerTools(serverName: string): Promise<APIResponse> {
     return this.request(`/api/v1/servers/${encodeURIComponent(serverName)}/discover-tools`, {
       method: 'POST',

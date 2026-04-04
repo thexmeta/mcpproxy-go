@@ -672,6 +672,74 @@
               </div>
             </div>
 
+            <!-- Disabled Tools Section -->
+            <div v-if="disabledTools.length > 0" class="mt-6">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="text-lg font-semibold text-warning">
+                    Disabled Tools ({{ disabledTools.length }})
+                  </h3>
+                  <p class="text-base-content/70 text-sm">Tools explicitly disabled in config</p>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <div
+                  v-for="toolName in disabledTools"
+                  :key="'disabled-' + toolName"
+                  class="flex items-center justify-between bg-base-200 rounded-lg px-4 py-3"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="badge badge-neutral badge-sm">disabled</span>
+                    <span class="font-mono text-sm">{{ toolName }}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span v-if="toolPreferenceLoading === toolName" class="loading loading-spinner loading-xs"></span>
+                    <button
+                      @click="toggleDisabledTool(toolName)"
+                      class="btn btn-sm btn-outline btn-success"
+                      :disabled="toolPreferenceLoading === toolName"
+                    >
+                      Enable
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Excluded Tools (via exclude_disabled_tools) -->
+            <div v-if="excludedTools.length > 0" class="mt-6">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="text-lg font-semibold text-base-content/60">
+                    Excluded Tools ({{ excludedTools.length }})
+                  </h3>
+                  <p class="text-base-content/70 text-sm">Tools hidden by "Exclude Disabled Tools" setting</p>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <div
+                  v-for="toolName in excludedTools"
+                  :key="'excluded-' + toolName"
+                  class="flex items-center justify-between bg-base-200 rounded-lg px-4 py-3 opacity-75"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="badge badge-ghost badge-sm">excluded</span>
+                    <span class="font-mono text-sm">{{ toolName }}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span v-if="toolPreferenceLoading === toolName" class="loading loading-spinner loading-xs"></span>
+                    <button
+                      @click="toggleDisabledTool(toolName)"
+                      class="btn btn-sm btn-outline"
+                      :disabled="toolPreferenceLoading === toolName"
+                    >
+                      Include
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div
                 v-for="tool in filteredTools"
@@ -1789,6 +1857,18 @@ const quarantinedTools = computed(() => {
   return toolApprovals.value.filter(t => t.status === 'pending' || t.status === 'changed')
 })
 
+// Disabled tools
+const disabledTools = computed(() => {
+  return server.value?.disabled_tools || []
+})
+
+const excludedTools = computed(() => {
+  // Tools excluded via exclude_disabled_tools (all tools not in enabled list)
+  if (!server.value?.exclude_disabled_tools) return []
+  const allToolNames = serverTools.value.map(t => t.name)
+  return allToolNames.filter(name => !isToolEnabled(name))
+})
+
 // Security scan (Spec 039)
 const dockerAvailable = ref(true) // optimistic default until overview loads
 const { hasEnabledScanners } = useSecurityScannerStatus()
@@ -2014,6 +2094,8 @@ function computeWordDiff(oldText: string, newText: string): DiffPart[] {
     refined.push(current)
   }
   return mergeSameKind(refined)
+}
+
 // Tool preference helpers
 function isToolEnabled(toolName: string): boolean {
   // First check if tool has enabled field from API response
@@ -2313,6 +2395,42 @@ async function toggleExcludeDisabledTools() {
     }
   } finally {
     actionLoading.value = false
+  }
+}
+
+async function toggleDisabledTool(toolName: string) {
+  if (!server.value) return
+
+  const currentList = server.value.disabled_tools || []
+  const isInDisabled = currentList.includes(toolName)
+  const newList = isInDisabled
+    ? currentList.filter(t => t !== toolName)
+    : [...currentList, toolName]
+
+  toolPreferenceLoading.value = toolName
+  try {
+    const response = await api.setDisabledTools(server.value.name, newList)
+    if (response.success) {
+      // Update local state
+      server.value.disabled_tools = newList
+      await serversStore.fetchServers()
+      server.value = serversStore.servers.find(s => s.name === props.serverName) || null
+      systemStore.addToast({
+        type: 'success',
+        title: 'Tool Updated',
+        message: `${toolName} has been ${isInDisabled ? 'enabled' : 'disabled'}`,
+      })
+    } else {
+      throw new Error(response.error || 'Failed to update')
+    }
+  } catch (err) {
+    systemStore.addToast({
+      type: 'error',
+      title: 'Update Failed',
+      message: err instanceof Error ? err.message : 'Failed to update tool',
+    })
+  } finally {
+    toolPreferenceLoading.value = null
   }
 }
 

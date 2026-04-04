@@ -179,6 +179,7 @@ export interface Server {
   isolation?: ServerIsolationConfig; // Per-server Docker isolation override
   isolation_defaults?: ServerIsolationDefaults; // Resolved baseline values (read-only)
   exclude_disabled_tools?: boolean; // If true, hide disabled tools from listings
+  disabled_tools?: string[]; // List of explicitly disabled tool names
   oauth?: {
     client_id: string;
     auth_url: string;
