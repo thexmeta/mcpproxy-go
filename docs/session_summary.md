@@ -1,76 +1,32 @@
-# Session Summary - 2026-04-04 (Session 2)
+# Session Summary - 2026-04-05 (Session 3)
 
-## Key Achievements
+## Achievements
+- **3 issues resolved** (mcpproxy-go-807, mcpproxy-go-3a2, mcpproxy-go-37f)
+- **1 bug fix** in `ServerDetail.vue` (tool toggle race condition)
+- **5 unit tests** added for `PatchServerConfig` disabled_tools flow
+- **1 E2E Playwright test suite** created (`tool-toggle.spec.ts`)
+- **Deployed** latest binary to `D:\Development\CodeMode\mcpproxy-go\mcpproxy.exe`
+- Service running on `127.0.0.1:3303`
 
-### Critical Architecture Fix: Config File ↔ In-Memory State Sync
-**Problem:** Config file (`mcp_config.json`) and in-memory/BBolt state diverged on every server change. The system used a circular dependency where `SaveConfiguration()` read from storage as source of truth, but `LoadConfiguredServers()` used config file as source of truth. Fields like `SkipQuarantine` and `Shared` were silently dropped during storage writes.
+## Bug Fix: Tool Toggle Race Condition
+**Problem:** Clicking Disable on an enabled tool sometimes showed wrong status message and required a second click. Root cause: `toggleDisabledTool()` called `serversStore.fetchServers()` which fetched stale server data from the API, overwriting the optimistic UI update before the user saw it.
 
-**Fix (8 files changed):**
-1. Added `SkipQuarantine` and `Shared` fields to `UpstreamRecord` (storage/models.go)
-2. Rewrote `SaveConfiguration()` — config snapshot is now source of truth, writes to both storage AND config file
-3. Rewrote `EnableServer()`/`QuarantineServer()` — update config snapshot first, then save both stores
-4. Rewrote `syncServerToStorage()` — copies full server config from snapshot, not just 2 fields
-5. Fixed `UpdateServerDisabledTools()` — now updates configSvc snapshot too
-6. Fixed `GetConfig()` — reads from `ConfigSnapshot()` instead of stale `r.cfg`
-7. Added `IsToolDisabled`/`DisableTool`/`EnableTool` helper methods to `ServerConfig`
+**Fix:** Replaced `fetchServers()` call with optimistic local state update (`server.value.disabled_tools = newList`). Added loading spinners to all toggle buttons (Enable, Include).
 
-### UI Tool Display Fix: `/tools` Endpoint Was Returning Disabled Tools
-**Problem:** `GET /servers/{name}/tools` returned ALL tools (enabled + disabled) because it only filtered when `exclude_disabled_tools` was set. Disabled tools showed as "enabled" in the UI.
+**Files changed:**
+- `frontend/src/views/ServerDetail.vue` — removed fetchServers, added spinners
+- `internal/management/service_tool_preference_test.go` — 5 new unit tests
+- `e2e/playwright/tool-toggle.spec.ts` — new E2E test suite
 
-**Fix:** `GetServerTools()` now always filters out disabled tools — this endpoint is "enabled tools only" by definition.
+## Discovered: Stale Config Entries
+**Issue:** Avalonia server config has 13 disabled_tools, but only 10 actually exist on the server. 3 are stale: `force_garbage_collection`, `generate_localization_system`, `create_avalonia_project`. These are harmless (backend filters them correctly) but should be cleaned up in a future session.
 
-### UI Tool Display Fix: `enabled` Field Missing from Tool Response
-**Problem:** `/servers/{name}/tools/all` returned tools without `enabled` field, so the UI couldn't distinguish enabled vs disabled tools.
+## Deployment
+- Binary rebuilt and copied to `D:\Development\CodeMode\mcpproxy-go\mcpproxy.exe`
+- MCP-Proxy service running on `127.0.0.1:3303`
+- API key: `7cfc0650025126049c92b47715e8bac71e6b0f5e2c54b3174014e5e886c0f243`
 
-**Fix:**
-- Added `Enabled` field to `contracts.Tool` struct
-- Updated `ConvertGenericToolsToTyped` to extract `enabled` from raw maps
-- `GetAllServerTools()` reads `DisabledTools` from config file (authoritative) and marks tools accordingly
-
-### UI Tool Display Fix: Config File Had 13 Disabled Tools But Only 4 Existed
-**Root cause identified:** The Avalonia MCP server binary no longer has 9 of the 13 tools listed in `disabled_tools` (e.g., `perform_health_check`, `create_avalonia_project`). The config file has stale entries from a previous server version. The UI correctly shows only the 4 disabled tools that actually exist on the server.
-
-### New Beads Issue
-- **mcpproxy-go-807** (P2 bug): "Fix tool toggle double-click race condition" — tracked for next session
-
-### Test Fixes
-- Fixed pre-broken `diagnostics_test.go` — added `StorageManager()` to `mockRuntimeOperations`
-- Fixed pre-broken `service_tool_preference_test.go` — added `StorageManager()` to `mockRuntime`
-- Fixed `TestService_GetToolPreferences` — corrected expectation (returns empty map without storage)
-
-## Files Changed This Session
-
-| File | Change |
-|------|--------|
-| `internal/storage/models.go` | Added `SkipQuarantine`, `Shared` to `UpstreamRecord` |
-| `internal/storage/manager.go` | Updated 4 conversion methods for new fields |
-| `internal/runtime/lifecycle.go` | `SaveConfiguration`: config snapshot → storage + file; `EnableServer`/`QuarantineServer`: snapshot first, then save |
-| `internal/runtime/runtime.go` | `GetConfig()`: reads from `ConfigSnapshot`; `getDisabledToolsFromConfig()`: reads from config file; `GetServerTools()`: always filters disabled; `UpdateServerDisabledTools()`: updates configSvc |
-| `internal/management/service.go` | `syncServerToStorage`: copies full server config, not just 2 fields |
-| `internal/config/config.go` | Added `IsToolDisabled`, `DisableTool`, `EnableTool` helpers |
-| `internal/contracts/types.go` | Added `Enabled` field to `Tool` struct |
-| `internal/contracts/converters.go` | Extract `enabled` field in `ConvertGenericToolsToTyped` |
-| `internal/management/service_test.go` | Added `StorageManager()` to mock |
-| `internal/management/service_tool_preference_test.go` | Added `StorageManager()` to mock; fixed broken test |
-
-## Architecture Decisions
-- **Config file is authoritative source of truth** for all server fields at all times
-- `SaveConfiguration()`: reads config snapshot → writes to storage + file → updates in-memory
-- `GetServerTools()` returns only enabled tools (disabled tools filtered out always)
-- `GetAllServerTools()` returns all tools with `enabled` field from config file
-- `getDisabledToolsFromConfig()` reads directly from config file, not stale in-memory
-
-## Test Results
-- `go build ./...` — Clean
-- `go test ./internal/storage/...` — All PASS
-- `go test ./internal/runtime/...` — All PASS
-- `go test ./internal/management/...` — All PASS (pre-broken tests fixed)
-- `go test ./internal/config/...` — 3 pre-existing failures (unrelated)
-
-## Integration Test Results
-- Test 1: Toggle server enabled via API → config file + API match ✅
-- Test 2: Edit config file → restart → API picks up change ✅
-- Test 3: PATCH disabled_tools → config file + API match ✅
-- `/api/v1/config` disabled_tools count matches `/api/v1/servers` for all 18 servers ✅
-- `/tools` endpoint filters disabled tools ✅
-- `/tools/all` endpoint includes `enabled` field ✅
+## Push Status
+- Local commit: `a197d79` (tool toggle race condition and add Phase 3 tests)
+- `git push` failed: 403 permission denied (thexmeta user not authorized for smart-mcp-proxy/mcpproxy-go)
+- Changes are committed locally, pending credential fix
