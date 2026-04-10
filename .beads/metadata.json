@@ -1,4 +1,6 @@
 {
   "database": "beads.db",
-  "jsonl_export": "issues.jsonl"
+  "backend": "sqlite",
+  "jsonl_export": "issues.jsonl",
+  "project_id": "cd7d8129-a035-41dd-aa10-ca68c4b62435"
 }

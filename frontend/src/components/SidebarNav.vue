@@ -232,22 +232,22 @@
               <router-link
                 to="/repositories"
                 :class="{ 'active': isActiveRoute('/repositories') }"
-                class="rounded-lg text-base-content/70"
+                class="rounded-lg font-medium"
                 :title="collapsed ? 'Repositories' : ''"
               >
                 <IconRepo class="w-5 h-5 shrink-0" />
-                <span v-show="!collapsed" class="text-[13px]">Repositories</span>
+                <span v-show="!collapsed">Repositories</span>
               </router-link>
             </li>
             <li>
               <router-link
                 to="/settings"
                 :class="{ 'active': isActiveRoute('/settings') }"
-                class="rounded-lg text-base-content/70"
+                class="rounded-lg font-medium"
                 :title="collapsed ? 'Configuration' : ''"
               >
                 <IconSettings class="w-5 h-5 shrink-0" />
-                <span v-show="!collapsed" class="text-[13px]">Configuration</span>
+                <span v-show="!collapsed">Configuration</span>
               </router-link>
             </li>
           </ul>

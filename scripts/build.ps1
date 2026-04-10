@@ -47,7 +47,38 @@ $LDFLAGS = "-X main.version=$Version -X main.commit=$Commit -X main.date=$Date -
 # Array to track built binaries
 $BuiltBinaries = @()
 
-# Build for current platform (with CGO for tray support if needed)
+# Step 1: Build frontend
+Write-Host "Building frontend..." -ForegroundColor Cyan
+$FrontendDir = Join-Path $PSScriptRoot "..\frontend"
+Push-Location $FrontendDir
+try {
+    npm install
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to install frontend dependencies"
+        exit 1
+    }
+    npm run build
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to build frontend"
+        exit 1
+    }
+}
+finally {
+    Pop-Location
+}
+
+# Step 2: Copy fresh frontend build to web/frontend/dist (for Go embed)
+Write-Host "Copying frontend to web/frontend/dist for embedding..." -ForegroundColor Cyan
+$RootDir = Join-Path $PSScriptRoot ".."
+$WebFrontendDir = Join-Path $RootDir "web\frontend"
+if (Test-Path $WebFrontendDir) {
+    Remove-Item -Recurse -Force $WebFrontendDir
+}
+New-Item -ItemType Directory -Path $WebFrontendDir -Force | Out-Null
+Copy-Item -Recurse (Join-Path $FrontendDir "dist") $WebFrontendDir
+Write-Host "  Frontend copied to web/frontend/dist" -ForegroundColor Green
+
+# Step 3: Build Go binary (embeds web/frontend/dist)
 Write-Host "Building for current platform..." -ForegroundColor Cyan
 go build -ldflags $LDFLAGS -o mcpproxy.exe ./cmd/mcpproxy
 if ($LASTEXITCODE -ne 0) {

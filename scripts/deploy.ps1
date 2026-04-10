@@ -1,5 +1,5 @@
 # MCPProxy Deploy Script
-# Copies built binaries to target folder and restarts the service
+# Builds frontend, copies to web/embed dir, builds Go binary, copies to target, restarts service
 
 param(
     [string]$Version = "v0.23.15",
@@ -8,28 +8,61 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$RootDir = Split-Path -Parent $PSScriptRoot
+$FrontendDir = Join-Path $RootDir "frontend"
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "MCPProxy Deploy" -ForegroundColor Cyan
 Write-Host "Version: $Version" -ForegroundColor Cyan
 Write-Host "Target: $TargetPath" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Extract the release
-$VersionNoV = $Version -replace '^v', ''
-$ZipPath = "releases\mcpproxy-${VersionNoV}-windows-amd64.zip"
-$ExtractPath = "releases\${Version}-deploy-temp"
-
-if (!(Test-Path $ZipPath)) {
-    Write-Host "Error: Release zip not found at $ZipPath" -ForegroundColor Red
-    exit 1
-}
-
+# Step 1: Build frontend
 Write-Host ""
-Write-Host "Extracting release..." -ForegroundColor Yellow
-if (Test-Path $ExtractPath) {
-    Remove-Item -Recurse -Force $ExtractPath
+Write-Host "Step 1/5: Building frontend..." -ForegroundColor Cyan
+Push-Location $FrontendDir
+try {
+    npm install
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install frontend dependencies"
+    }
+    npm run build
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to build frontend"
+    }
 }
-Expand-Archive -Path $ZipPath -DestinationPath $ExtractPath -Force
+finally {
+    Pop-Location
+}
+Write-Host "  Frontend built successfully" -ForegroundColor Green
+
+# Step 2: Copy to web/frontend/dist (for Go embed)
+Write-Host ""
+Write-Host "Step 2/5: Copying frontend to web/frontend/dist..." -ForegroundColor Cyan
+$WebFrontendDir = Join-Path $RootDir "web\frontend"
+if (Test-Path $WebFrontendDir) {
+    Remove-Item -Recurse -Force $WebFrontendDir
+}
+New-Item -ItemType Directory -Path $WebFrontendDir -Force | Out-Null
+Copy-Item -Recurse (Join-Path $FrontendDir "dist") $WebFrontendDir
+Write-Host "  Copied to web/frontend/dist" -ForegroundColor Green
+
+# Step 3: Build Go binary
+Write-Host ""
+Write-Host "Step 3/5: Building Go binary..." -ForegroundColor Cyan
+Push-Location $RootDir
+try {
+    $LDFLAGS = "-X main.version=$Version -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ') -s -w"
+    go build -ldflags $LDFLAGS -o mcpproxy.exe ./cmd/mcpproxy
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to build Go binary"
+    }
+    $BinaryPath = Join-Path $RootDir "mcpproxy.exe"
+    Write-Host "  Go binary built: $BinaryPath" -ForegroundColor Green
+}
+finally {
+    Pop-Location
+}
 
 # Verify target directory exists
 if (!(Test-Path $TargetPath)) {
@@ -39,7 +72,7 @@ if (!(Test-Path $TargetPath)) {
 
 # Stop MCP-Proxy service before copying
 Write-Host ""
-Write-Host "Stopping MCP-Proxy service..." -ForegroundColor Yellow
+Write-Host "Step 4/5: Stopping MCP-Proxy service..." -ForegroundColor Yellow
 $ServiceStopped = $false
 try {
     $Service = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
@@ -66,34 +99,43 @@ catch {
     $ServiceStopped = $true
 }
 
-# Copy binaries
+# Copy freshly built binary
 Write-Host ""
-Write-Host "Copying binaries to target..." -ForegroundColor Yellow
+Write-Host "Step 5/5: Copying binaries to target..." -ForegroundColor Yellow
 
-$FilesToCopy = @(
-    "mcpproxy.exe",
-    "mcpproxy-tray.exe"
-)
+$RootBinary = Join-Path $RootDir "mcpproxy.exe"
+$DestBinary = Join-Path $TargetPath "mcpproxy.exe"
 
 $CopySuccess = 0
 $CopyFailed = 0
 
-foreach ($File in $FilesToCopy) {
-    $Source = "$ExtractPath\$File"
-    $Dest = "$TargetPath\$File"
+if (Test-Path $RootBinary) {
+    try {
+        Copy-Item -Path $RootBinary -Destination $DestBinary -Force
+        Write-Host "  Copied: mcpproxy.exe" -ForegroundColor Green
+        $CopySuccess++
+    }
+    catch {
+        Write-Host "  Error: Failed to copy mcpproxy.exe - $_" -ForegroundColor Red
+        $CopyFailed++
+    }
+} else {
+    Write-Host "  Error: mcpproxy.exe not found at $RootBinary" -ForegroundColor Red
+    $CopyFailed++
+}
 
-    if (Test-Path $Source) {
-        try {
-            Copy-Item -Path $Source -Destination $Dest -Force
-            Write-Host "  Copied: $File" -ForegroundColor Green
-            $CopySuccess++
-        }
-        catch {
-            Write-Host "  Error: Failed to copy $File - $_" -ForegroundColor Red
-            $CopyFailed++
-        }
-    } else {
-        Write-Host "  Warning: $File not found in release" -ForegroundColor Yellow
+# Also copy tray if it exists
+$RootTray = Join-Path $RootDir "mcpproxy-tray.exe"
+$DestTray = Join-Path $TargetPath "mcpproxy-tray.exe"
+if (Test-Path $RootTray) {
+    try {
+        Copy-Item -Path $RootTray -Destination $DestTray -Force
+        Write-Host "  Copied: mcpproxy-tray.exe" -ForegroundColor Green
+        $CopySuccess++
+    }
+    catch {
+        Write-Host "  Error: Failed to copy mcpproxy-tray.exe - $_" -ForegroundColor Red
+        $CopyFailed++
     }
 }
 
@@ -108,7 +150,7 @@ if ($ServiceStopped) {
     Write-Host "Starting MCP-Proxy service..." -ForegroundColor Yellow
     try {
         Start-Service -Name "MCP-Proxy" -WarningAction SilentlyContinue
-        Start-Sleep -Seconds 3
+        Start-Sleep -Seconds 5
         $ServiceStatus = Get-Service -Name "MCP-Proxy" -ErrorAction SilentlyContinue
         if ($ServiceStatus) {
             Write-Host "  Service status: $($ServiceStatus.Status)" -ForegroundColor Green
@@ -120,11 +162,6 @@ if ($ServiceStopped) {
         Write-Host "  Warning: Failed to start service: $_" -ForegroundColor Yellow
     }
 }
-
-# Cleanup
-Write-Host ""
-Write-Host "Cleaning up..." -ForegroundColor Yellow
-Remove-Item -Recurse -Force $ExtractPath
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan

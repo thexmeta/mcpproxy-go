@@ -80,8 +80,6 @@ frontend/.output/
 frontend/.cache/
 frontend/coverage/
 
-# Embedded frontend assets (auto-generated)
-web/frontend/
 
 # Test coverage
 coverage.out

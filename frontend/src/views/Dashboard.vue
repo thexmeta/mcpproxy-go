@@ -1,8 +1,5 @@
 <template>
   <div class="space-y-6">
-    <!-- Telemetry Notice Banner -->
-    <TelemetryBanner />
-
     <!-- Servers Needing Attention Banner (using unified health status) -->
     <div
       v-if="serversNeedingAttention.length > 0"
@@ -394,7 +391,6 @@ import { useSecurityScannerStatus, refreshSecurityScannerStatus } from '@/compos
 import api from '@/services/api'
 import logoSvg from '@/assets/logo.svg'
 import CollapsibleHintsPanel from '@/components/CollapsibleHintsPanel.vue'
-import TelemetryBanner from '@/components/TelemetryBanner.vue'
 import TokenPieChart from '@/components/TokenPieChart.vue'
 import ConnectModal from '@/components/ConnectModal.vue'
 import AddServerModal from '@/components/AddServerModal.vue'

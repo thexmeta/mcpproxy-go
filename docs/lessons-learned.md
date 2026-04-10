@@ -1,6 +1,28 @@
 # Lessons Learned - MCPProxy-Go
 
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-10
+
+---
+
+## Go Embed Requires Fresh Frontend Copy (2026-04-10)
+
+### Problem
+User clicked "Repositories" and "Configuration" in sidebar — nothing happened. Frontend source was updated but changes never appeared in the running application.
+
+### Root Cause
+The Go binary uses `//go:embed frontend/dist` in `web/web.go`, which embeds `web/frontend/dist/` at compile time — NOT `frontend/dist/`. Running `npm run build` in `frontend/` outputs to `frontend/dist/` but the `go build` step never copied those fresh files to `web/frontend/dist/`. The binary was always built with stale frontend assets from a previous build session.
+
+### Fix
+- `scripts/build.ps1`: Added `npm run build` → copy `frontend/dist/` to `web/frontend/dist/` → `go build` pipeline
+- `scripts/deploy.ps1`: Complete rewrite to build-from-source instead of extracting from release zip
+- The Makefile (`make frontend-build`) already had this step but manual builds missed it
+
+### Lesson
+**Always verify which directory `//go:embed` actually reads.** When using Go embed with a frontend build pipeline:
+1. Build frontend → outputs to `frontend/dist/`
+2. **Copy** `frontend/dist/` → `web/frontend/dist/` (the embed source)
+3. `go build` (embeds `web/frontend/dist/`)
+Step 2 is easy to forget and causes silent stale-asset bugs.
 
 ---
 

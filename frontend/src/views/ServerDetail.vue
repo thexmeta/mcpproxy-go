@@ -3115,7 +3115,7 @@ watch(logTail, () => {
 
 // Load data on mount
 onMounted(() => {
-  // Read tab from query parameter (e.g., ?tab=security)
+  // Read tab from URL query parameter if present (e.g., ?tab=security)
   const tabParam = route.query.tab as string
   if (tabParam && ['tools', 'logs', 'config', 'security'].includes(tabParam)) {
     activeTab.value = tabParam as typeof activeTab.value
