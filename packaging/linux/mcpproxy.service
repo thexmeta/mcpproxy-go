@@ -1,4 +1,10 @@
-[Unit]
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07.784445032 +0300 +03 m=+0.013503867 write error: can't rename log file: rename /var/log/mcpproxy/main.log /var/log/mcpproxy/main-2026-04-22T23-46-07.784.log: read-only file system
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07        INFO        bbolt@v1.4.1/db.go:908        Closed stale sessions on startup        {"count": 1}
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07.784715268 +0300 +03 m=+0.013774093 write error: can't rename log file: rename /var/log/mcpproxy/main.log /var/log/mcpproxy/main-2026-04-22T23-46-07.784.log: read-only file system
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07        INFO        index/manager.go:21        Opened existing Bleve index        {"path": "/var/lib/mcpproxy/index.bleve"}
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07.788130328 +0300 +03 m=+0.017189173 write error: can't rename log file: rename /var/log/mcpproxy/main.log /var/log/mcpproxy/main-2026-04-22T23-46-07.788.log: read-only file system
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07        INFO        runtime/runtime.go:119        Docker recovery monitor disabled (docker isolation off or recovery disabled in config)
+Apr 23 02:46:07 mx-lenovo mcpproxy[346516]: 2026-04-23 02:46:07.788337536 +0300 +03 m=+0.017396362 write error: can't rename log file: rename /var/log/mcpproxy/main.log /var/log/mcpproxy/main-2026-04-22T23-46-07.788.log: read-only file system[Unit]
 Description=MCPProxy - Smart proxy for AI agents using Model Context Protocol
 Documentation=https://mcpproxy.app https://github.com/smart-mcp-proxy/mcpproxy-go
 After=network-online.target
@@ -6,9 +12,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=mcpproxy
-Group=mcpproxy
-ExecStart=/usr/bin/mcpproxy serve --config=/etc/mcpproxy/mcp_config.json --data-dir=/var/lib/mcpproxy
+User=root
+Group=root
+ExecStart=/usr/local/bin/mcpproxy serve --config=/etc/mcpproxy/mcp_config.json --data-dir=/var/lib/mcpproxy
 Restart=on-failure
 RestartSec=5s
 

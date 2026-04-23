@@ -1316,6 +1316,12 @@ components:
           type: boolean
         created:
           type: string
+        disabled_tools:
+          description: List of explicitly disabled tool names
+          items:
+            type: string
+          type: array
+          uniqueItems: false
         enabled:
           type: boolean
         env:
@@ -1473,6 +1479,8 @@ components:
           type: string
         description:
           type: string
+        enabled:
+          type: boolean
         last_used:
           type: string
         name:
@@ -1616,12 +1624,19 @@ components:
           uniqueItems: false
         command:
           type: string
+        disabled_tools:
+          items:
+            type: string
+          type: array
+          uniqueItems: false
         enabled:
           type: boolean
         env:
           additionalProperties:
             type: string
           type: object
+        exclude_disabled_tools:
+          type: boolean
         headers:
           additionalProperties:
             type: string
@@ -3575,6 +3590,48 @@ paths:
       - ApiKeyAuth: []
       - ApiKeyQuery: []
       summary: Get tools for a server
+      tags:
+      - servers
+  /api/v1/servers/{id}/tools/all:
+    get:
+      description: Retrieve all tools (including disabled) for a specific upstream
+        MCP server
+      parameters:
+      - description: Server ID or name
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.GetServerToolsResponse'
+          description: All server tools retrieved successfully
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Bad request (missing server ID)
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Server not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/contracts.ErrorResponse'
+          description: Internal server error
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyQuery: []
+      summary: Get all tools for a server including disabled ones
       tags:
       - servers
   /api/v1/servers/{id}/unquarantine:

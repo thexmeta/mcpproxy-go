@@ -1,0 +1,31 @@
+[Unit]
+Description=MCP Proxy
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mcpproxy serve --listen 127.0.0.1:3303
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mcpproxy
+RestartSec=5
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Data directory configuration
+Environment=HOME=/root
+Environment=MCPP_DATA_DIR=/etc/mcpproxy
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/mcpproxy /etc/mcpproxy
+
+# Go runtime performance tuning (adjust as needed)
+Environment=GOGC=200
+Environment=GOMEMLIMIT=500MiB
+
+[Install]
+WantedBy=multi-user.target

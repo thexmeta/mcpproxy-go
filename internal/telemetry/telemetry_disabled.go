@@ -73,6 +73,24 @@ func (s *Service) SetRuntimeStats(stats RuntimeStats) {
 	s.stats = stats
 }
 
+// Registry returns nil for the disabled telemetry service.
+func (s *Service) Registry() *CounterRegistry {
+	return nil
+}
+
+// BuildPayload returns an empty heartbeat payload for the disabled service.
+func (s *Service) BuildPayload() HeartbeatPayload {
+	return HeartbeatPayload{
+		AnonymousID: "disabled",
+		Version:     s.version,
+		Edition:     s.edition,
+		OS:          "linux",
+		Arch:        "amd64",
+		GoVersion:   "go1.24",
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
 // Start begins the telemetry service (DISABLED - no-op).
 // TELEMETRY IS DISABLED BY DEFAULT for privacy.
 func (s *Service) Start(ctx context.Context) {

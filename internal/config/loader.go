@@ -74,6 +74,12 @@ func Load() (*Config, error) {
 	// Set up viper
 	setupViper()
 
+	// Check for data-dir from environment variable BEFORE any file operations
+	// This allows systemd services to set MCPP_DATA_DIR without requiring --data-dir flag
+	if envDataDir := viper.GetString("data-dir"); envDataDir != "" {
+		cfg.DataDir = envDataDir
+	}
+
 	// Load from config file if specified
 	configPath := viper.GetString("config")
 	configFileAutoLoaded := false
@@ -180,6 +186,7 @@ func setupViper() {
 	viper.SetDefault("top-k", 5)
 	viper.SetDefault("tools-limit", 15)
 	viper.SetDefault("config", "")
+	viper.SetDefault("data-dir", "") // Allow MCPP_DATA_DIR environment variable
 
 	// Security defaults
 	viper.SetDefault("read-only-mode", false)
@@ -201,6 +208,14 @@ func findAndLoadConfigFile(cfg *Config) (found bool, path string, err error) {
 	locations := []string{
 		ConfigFileName,
 		filepath.Join(".", ConfigFileName),
+	}
+
+	// Check custom data directory FIRST (from environment variable or prior config)
+	if cfg.DataDir != "" {
+		customPath := filepath.Join(cfg.DataDir, ConfigFileName)
+		if _, err := os.Stat(customPath); err == nil {
+			return true, customPath, loadConfigFile(customPath, cfg)
+		}
 	}
 
 	// Add home directory location

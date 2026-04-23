@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -1643,11 +1642,8 @@ func (s *Server) RequestHardRestart() error {
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = cwd
 
-	// On Windows, detach the process so it survives after parent exits
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-		HideWindow:    false,
-	}
+	// Apply platform-specific process attributes
+	setSysProcAttr(cmd)
 
 	// Redirect output to avoid inheriting handles
 	cmd.Stdout = nil
