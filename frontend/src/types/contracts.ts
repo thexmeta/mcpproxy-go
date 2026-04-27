@@ -94,9 +94,9 @@ export interface IsolationConfig {
   image?: string;
   network_mode?: string;
   extra_args?: string[];
+  working_dir?: string;
   memory_limit?: string;
   cpu_limit?: string;
-  working_dir?: string;
   timeout?: string;
 }
 

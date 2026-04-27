@@ -16,7 +16,6 @@ import (
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/contracts"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/reqcontext"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/secret"
-	"github.com/smart-mcp-proxy/mcpproxy-go/internal/storage"
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/upstream/core"
 )
 
@@ -269,7 +268,7 @@ func stringifyDiagnosticField(v interface{}) string {
 	}
 }
 
-func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contracts.ServerStats, error) {
+func (s *ServiceImpl) ListServers(ctx context.Context) ([]*contracts.Server, *contracts.ServerStats, error) {
 	// Get servers from runtime
 	serversRaw, err := s.runtime.GetAllServers()
 	if err != nil {
@@ -344,7 +343,8 @@ func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contra
 		if isoRaw, ok := srvRaw["isolation"].(map[string]interface{}); ok && isoRaw != nil {
 			iso := &contracts.IsolationConfig{}
 			if enabled, ok := isoRaw["enabled"].(bool); ok {
-				iso.Enabled = enabled
+				e := enabled
+				iso.Enabled = &e
 			}
 			if img, ok := isoRaw["image"].(string); ok {
 				iso.Image = img
@@ -382,7 +382,7 @@ func (s *service) ListServers(ctx context.Context) ([]*contracts.Server, *contra
 					Image:       defaults.Image,
 					NetworkMode: defaults.NetworkMode,
 					ExtraArgs:   defaults.ExtraArgs,
-					WorkingDir:  defaults.ContainerWorkingDir,
+					ContainerWorkingDir: defaults.ContainerWorkingDir,
 				}
 			}
 		}

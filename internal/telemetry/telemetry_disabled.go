@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.etcd.io/bbolt"
 	"go.uber.org/zap"
 
 	"github.com/smart-mcp-proxy/mcpproxy-go/internal/config"
@@ -75,6 +76,19 @@ func (s *Service) SetRuntimeStats(stats RuntimeStats) {
 
 // Registry returns nil for the disabled telemetry service.
 func (s *Service) Registry() *CounterRegistry {
+	return nil
+}
+
+// SetActivationStore is a no-op for the disabled telemetry service.
+func (s *Service) SetActivationStore(store ActivationStore, db *bbolt.DB) {}
+
+// ActivationStore returns nil for the disabled telemetry service.
+func (s *Service) ActivationStore() ActivationStore {
+	return nil
+}
+
+// ActivationDB returns nil for the disabled telemetry service.
+func (s *Service) ActivationDB() *bbolt.DB {
 	return nil
 }
 

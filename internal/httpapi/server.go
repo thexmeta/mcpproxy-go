@@ -218,7 +218,6 @@ func (s *Server) SetFeedbackSubmitter(submitter FeedbackSubmitter) {
 func (s *Server) SetConnectService(service *connect.Service) {
 	s.connectService = service
 }
-}
 
 // Router returns the underlying chi.Mux for external route registration.
 // This is used by the server edition to mount OAuth routes outside
@@ -2359,7 +2358,7 @@ func (s *Server) handleGetServerTools(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request) {
 	serverID := chi.URLParam(r, "name")
 	if serverID == "" {
-		s.errorResponse(w, r, http.StatusBadRequest, "Server name is required", nil)
+		s.writeError(w, r, http.StatusBadRequest, "Server name is required")
 		return
 	}
 
@@ -2368,16 +2367,16 @@ func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request)
 		GetAllServerTools(ctx context.Context, name string) ([]map[string]interface{}, error)
 	})
 	if !ok {
-		s.errorResponse(w, r, http.StatusNotImplemented, "Management service does not support GetAllServerTools", nil)
+		s.writeError(w, r, http.StatusNotImplemented, "Management service does not support GetAllServerTools")
 		return
 	}
 
 	tools, err := mgmtSvc.GetAllServerTools(r.Context(), serverID)
 	if err != nil {
 		if err.Error() == "server not found" {
-			s.errorResponse(w, r, http.StatusNotFound, "Server not found", nil)
+			s.writeError(w, r, http.StatusNotFound, "Server not found")
 		} else {
-			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to get server tools", err)
+			s.writeError(w, r, http.StatusInternalServerError, "Failed to get server tools")
 		}
 		return
 	}
@@ -2413,7 +2412,7 @@ func (s *Server) handleGetAllServerTools(w http.ResponseWriter, r *http.Request)
 		Count:      len(typedTools),
 	}
 
-	s.jsonResponse(w, r, http.StatusOK, response)
+	s.writeSuccess(w, response)
 }
 
 // handleGetServerLogs godoc
@@ -4161,107 +4160,6 @@ func (s *Server) handleExportToolDescriptions(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// handleGetToolPreferences handles GET /api/v1/servers/{id}/tools/preferences
-func (s *Server) handleGetToolPreferences(w http.ResponseWriter, r *http.Request) {
-	serverID := chi.URLParam(r, "id")
-	if serverID == "" {
-		s.writeError(w, r, http.StatusBadRequest, "Server ID required")
-		return
-	}
-
-	mgmtSvc, ok := s.controller.GetManagementService().(interface {
-		GetToolPreferences(ctx context.Context, serverName string) (map[string]*contracts.ToolPreference, error)
-	})
-	if !ok {
-		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
-		return
-	}
-
-	prefs, err := mgmtSvc.GetToolPreferences(r.Context(), serverID)
-	if err != nil {
-		s.logger.Error("Failed to get tool preferences", "server", serverID, "error", err)
-		if strings.Contains(err.Error(), "not found") {
-			s.writeError(w, r, http.StatusNotFound, err.Error())
-			return
-		}
-		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to get preferences: %v", err))
-		return
-	}
-
-	s.writeSuccess(w, map[string]interface{}{
-		"preferences": prefs,
-	})
-}
-
-// handleUpdateToolPreference handles PUT /api/v1/servers/{id}/tools/preferences/{tool}
-func (s *Server) handleUpdateToolPreference(w http.ResponseWriter, r *http.Request) {
-	serverID := chi.URLParam(r, "id")
-	toolName := chi.URLParam(r, "tool")
-	if serverID == "" || toolName == "" {
-		s.writeError(w, r, http.StatusBadRequest, "Server ID and tool name required")
-		return
-	}
-
-	var pref contracts.ToolPreference
-	if err := json.NewDecoder(r.Body).Decode(&pref); err != nil {
-		s.writeError(w, r, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	mgmtSvc, ok := s.controller.GetManagementService().(interface {
-		UpdateToolPreference(ctx context.Context, serverName, toolName string, pref *contracts.ToolPreference) error
-	})
-	if !ok {
-		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
-		return
-	}
-
-	if err := mgmtSvc.UpdateToolPreference(r.Context(), serverID, toolName, &pref); err != nil {
-		s.logger.Error("Failed to update tool preference", "server", serverID, "tool", toolName, "error", err)
-		if strings.Contains(err.Error(), "not found") {
-			s.writeError(w, r, http.StatusNotFound, err.Error())
-			return
-		}
-		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update preference: %v", err))
-		return
-	}
-
-	s.writeSuccess(w, map[string]interface{}{
-		"message": fmt.Sprintf("Tool '%s' preference updated for server %s", toolName, serverID),
-	})
-}
-
-// handleDeleteToolPreference handles DELETE /api/v1/servers/{id}/tools/preferences/{tool}
-func (s *Server) handleDeleteToolPreference(w http.ResponseWriter, r *http.Request) {
-	serverID := chi.URLParam(r, "id")
-	toolName := chi.URLParam(r, "tool")
-	if serverID == "" || toolName == "" {
-		s.writeError(w, r, http.StatusBadRequest, "Server ID and tool name required")
-		return
-	}
-
-	mgmtSvc, ok := s.controller.GetManagementService().(interface {
-		DeleteToolPreference(ctx context.Context, serverName, toolName string) error
-	})
-	if !ok {
-		s.writeError(w, r, http.StatusInternalServerError, "Management service not available")
-		return
-	}
-
-	if err := mgmtSvc.DeleteToolPreference(r.Context(), serverID, toolName); err != nil {
-		s.logger.Error("Failed to delete tool preference", "server", serverID, "tool", toolName, "error", err)
-		if strings.Contains(err.Error(), "not found") {
-			s.writeError(w, r, http.StatusNotFound, err.Error())
-			return
-		}
-		s.writeError(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to delete preference: %v", err))
-		return
-	}
-
-	s.writeSuccess(w, map[string]interface{}{
-		"message": fmt.Sprintf("Tool '%s' preference deleted for server %s", toolName, serverID),
-	})
-}
 
 // handleAnnotationCoverage godoc
 // @Summary Get annotation coverage report

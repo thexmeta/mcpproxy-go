@@ -132,14 +132,11 @@ type IsolationConfig struct {
 // IsolationDefaults represents the baseline Docker isolation settings
 // that would apply to a server when it has no overrides.
 type IsolationDefaults struct {
-	Enabled           bool              `json:"enabled"`
-	DefaultImages     map[string]string `json:"default_images,omitempty"`
-	Registry          string            `json:"registry,omitempty"`
-	NetworkMode       string            `json:"network_mode,omitempty"`
-	MemoryLimit       string            `json:"memory_limit,omitempty"`
-	CPULimit          string            `json:"cpu_limit,omitempty"`
-	Timeout           string            `json:"timeout,omitempty"`
-	EnableCacheVolume bool              `json:"enable_cache_volume"`
+	RuntimeType         string   `json:"runtime_type,omitempty"`
+	Image               string   `json:"image,omitempty"`
+	NetworkMode         string   `json:"network_mode,omitempty"`
+	ExtraArgs           []string `json:"extra_args,omitempty"`
+	ContainerWorkingDir string   `json:"container_working_dir,omitempty"`
 }
 
 // ToolAnnotation represents MCP tool behavior hints
@@ -809,4 +806,49 @@ type ErrorResponse struct {
 	Success   bool   `json:"success"`
 	Error     string `json:"error"`
 	RequestID string `json:"request_id,omitempty"`
+}
+
+// UpdateInfo represents version update check information
+type UpdateInfo struct {
+	Available     bool       `json:"available"`                // Whether an update is available
+	LatestVersion string     `json:"latest_version,omitempty"` // Latest version available (e.g., "v1.2.3")
+	ReleaseURL    string     `json:"release_url,omitempty"`    // URL to the release page
+	CheckedAt     *time.Time `json:"checked_at,omitempty"`     // When the update check was performed
+	IsPrerelease  bool       `json:"is_prerelease,omitempty"`  // Whether the latest version is a prerelease
+	CheckError    string     `json:"check_error,omitempty"`    // Error message if update check failed
+}
+
+// InfoEndpoints represents the available API endpoints
+type InfoEndpoints struct {
+	HTTP   string `json:"http"`   // HTTP endpoint address (e.g., "127.0.0.1:8080")
+	Socket string `json:"socket"` // Unix socket path (empty if disabled)
+}
+
+// InfoResponse is the response for GET /api/v1/info
+type InfoResponse struct {
+	Version    string        `json:"version"`          // Current MCPProxy version
+	WebUIURL   string        `json:"web_ui_url"`       // URL to access the web control panel
+	ListenAddr string        `json:"listen_addr"`      // Listen address (e.g., "127.0.0.1:8080")
+	Endpoints  InfoEndpoints `json:"endpoints"`        // Available API endpoints
+	Update     *UpdateInfo   `json:"update,omitempty"` // Update information (if available)
+}
+
+// ToolPreferenceUpdate represents a request to update a tool's preferences.
+type ToolPreferenceUpdate struct {
+	Enabled           bool   `json:"enabled"`
+	CustomName        string `json:"custom_name,omitempty"`
+	CustomDescription string `json:"custom_description,omitempty"`
+}
+
+// GetToolPreferencesResponse is the response for GET /api/v1/servers/{id}/tools/preferences
+type GetToolPreferencesResponse struct {
+	ServerName  string                     `json:"server_name"`
+	Preferences map[string]*ToolPreference `json:"preferences"`
+	Count       int                        `json:"count"`
+}
+
+// BulkToolPreferenceUpdateResponse is the response for POST /api/v1/servers/{id}/tools/preferences/bulk
+type BulkToolPreferenceUpdateResponse struct {
+	Server  string `json:"server"`
+	Updated int    `json:"updated"`
 }

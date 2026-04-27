@@ -42,14 +42,11 @@ func ConvertServerConfig(cfg *config.ServerConfig, status string, connected bool
 		}
 	}
 
-	// Convert isolation config if present. The per-server overrides that
-	// actually live on config.IsolationConfig are Image/NetworkMode/
-	// ExtraArgs/WorkingDir; MemoryLimit/CPULimit/Timeout are still only
-	// available at the global DockerIsolationConfig level, so they stay
-	// empty here until that refactor lands.
+	// Convert isolation config if present.
 	if cfg.Isolation != nil {
+		enabled := cfg.Isolation.IsEnabled()
 		server.Isolation = &IsolationConfig{
-			Enabled:     cfg.Isolation.IsEnabled(),
+			Enabled:     &enabled,
 			Image:       cfg.Isolation.Image,
 			NetworkMode: cfg.Isolation.NetworkMode,
 			ExtraArgs:   append([]string(nil), cfg.Isolation.ExtraArgs...),
