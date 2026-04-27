@@ -5,6 +5,7 @@
     "tools": [
       {
         "description": "A simple echo tool for testing",
+        "enabled": true,
         "name": "echo_tool",
         "server_name": "test-server",
         "usage": 10

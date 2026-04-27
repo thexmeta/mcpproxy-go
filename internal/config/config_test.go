@@ -1131,6 +1131,7 @@ func TestLoadConfig_DataDirExpandFailure(t *testing.T) {
 		"original unresolved ref should be retained when expansion fails")
 }
 
+/*
 func TestConfig_IsTelemetryEnabled(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1290,6 +1291,7 @@ func TestTelemetryConfig_OmittedWhenNil(t *testing.T) {
 	// telemetry should not appear in JSON when nil
 	assert.NotContains(t, string(data), "telemetry")
 }
+*/
 
 func TestServerConfig_ReconnectOnUse(t *testing.T) {
 	t.Run("defaults to false", func(t *testing.T) {

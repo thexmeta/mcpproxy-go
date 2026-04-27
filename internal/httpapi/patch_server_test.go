@@ -38,9 +38,44 @@ func (m *mockPatchServerController) GetConfig() (*config.Config, error) {
 	}, nil
 }
 
+func (m *mockPatchServerController) GetManagementService() interface{} {
+	return m
+}
+
+func (m *mockPatchServerController) PatchServerConfig(ctx context.Context, serverName string, patch map[string]interface{}) error {
+	// Reconstruct ServerConfig from patch to simulate the old behavior for the test assertions
+	if m.capturedUpdates == nil {
+		m.capturedUpdates = &config.ServerConfig{}
+		// Initialize with existing server if available
+		if m.existingServer != nil {
+			*m.capturedUpdates = *m.existingServer
+		}
+	}
+
+	// Apply patch fields manually (simplified for test)
+	if url, ok := patch["url"].(string); ok {
+		m.capturedUpdates.URL = url
+	}
+	if cmd, ok := patch["command"].(string); ok {
+		m.capturedUpdates.Command = cmd
+	}
+	if args, ok := patch["args"].([]string); ok {
+		m.capturedUpdates.Args = args
+	}
+	if enabled, ok := patch["enabled"].(bool); ok {
+		m.capturedUpdates.Enabled = enabled
+	}
+	if quarantined, ok := patch["quarantined"].(bool); ok {
+		m.capturedUpdates.Quarantined = quarantined
+	}
+	if reconnect, ok := patch["reconnect_on_use"].(bool); ok {
+		m.capturedUpdates.ReconnectOnUse = reconnect
+	}
+
+	return nil
+}
+
 func (m *mockPatchServerController) UpdateServer(_ context.Context, _ string, updates *config.ServerConfig) error {
-	// Capture a shallow copy so subsequent mutations by the handler don't
-	// surprise the assertion.
 	clone := *updates
 	m.capturedUpdates = &clone
 	return nil

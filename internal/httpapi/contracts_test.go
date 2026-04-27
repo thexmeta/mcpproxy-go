@@ -88,6 +88,10 @@ func (m *mockManagementService) TriggerOAuthLogout(ctx context.Context, name str
 	return nil
 }
 
+func (m *mockManagementService) PatchServerConfig(ctx context.Context, name string, patch map[string]interface{}) error {
+	return nil
+}
+
 func (m *MockServerController) IsRunning() bool          { return true }
 func (m *MockServerController) GetListenAddress() string { return ":8080" }
 func (m *MockServerController) GetManagementService() interface{} {
@@ -345,6 +349,9 @@ func (m *MockServerController) GetToolApproval(_, _ string) (*storage.ToolApprov
 	return nil, nil
 }
 func (m *MockServerController) GetToolApprovalStatus(_, _ string) (string, error) { return "", nil }
+
+func (m *MockServerController) RequestRestart() error     { return nil }
+func (m *MockServerController) RequestHardRestart() error { return nil }
 
 // Test contract compliance for API responses
 func TestAPIContractCompliance(t *testing.T) {

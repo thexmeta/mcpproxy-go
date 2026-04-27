@@ -250,7 +250,7 @@ func (m *baseController) GetQuarantinedServers() ([]map[string]interface{}, erro
 	return nil, nil
 }
 func (m *baseController) UnquarantineServer(serverName string) error { return nil }
-func (m *baseController) GetManagementService() interface{}          { return nil }
+func (m *baseController) GetManagementService() interface{}          { return &mockManagementService{} }
 func (m *baseController) GetServerTools(serverName string) ([]map[string]interface{}, error) {
 	return nil, nil
 }
@@ -341,3 +341,6 @@ func (m *baseController) GetToolApproval(_, _ string) (*storage.ToolApprovalReco
 	return nil, nil
 }
 func (m *baseController) GetToolApprovalStatus(_, _ string) (string, error) { return "", nil }
+func (m *baseController) RequestRestart() error                         { return nil }
+func (m *baseController) RequestHardRestart() error                     { return nil }
+func (m *baseController) GetCurrentConfig() interface{}                 { return nil }

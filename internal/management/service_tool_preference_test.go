@@ -572,6 +572,10 @@ func (m *mockRuntime) RefreshOAuthToken(serverName string) error {
 	return nil
 }
 
+func (m *mockRuntime) GetToolApproval(serverName, toolName string) (*storage.ToolApprovalRecord, error) {
+	return nil, nil
+}
+
 // Tests for PatchServerConfig disabled_tools flow (mcpproxy-go-807 / mcpproxy-go-37f)
 
 func TestService_PatchServerConfig_DisableTools(t *testing.T) {
